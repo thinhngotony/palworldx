@@ -60,6 +60,11 @@ check_steam_user() {
     fi
 }
 
+# Check if server screen session is running (works from any user)
+is_server_running() {
+    su - $STEAM_USER -c "screen -list 2>/dev/null" | grep -q "$SCREEN_NAME"
+}
+
 # Detect OS
 detect_os() {
     if [ -f /etc/os-release ]; then
@@ -335,12 +340,12 @@ do_status() {
     echo ""
 
     # Check if running
-    if screen -list 2>/dev/null | grep -q "$SCREEN_NAME"; then
+    if is_server_running; then
         echo -e "Server:       ${GREEN}✓ Running${NC}"
         echo -e "Screen:       ${SCREEN_NAME}"
 
         # Try to get process info
-        PID=$(screen -list | grep "$SCREEN_NAME" | awk -F'[.]' '{print $1}' | tr -d '[:space:]')
+        PID=$(su - $STEAM_USER -c "screen -list" | grep "$SCREEN_NAME" | awk -F'[.]' '{print $1}' | tr -d '[:space:]')
         if [ -n "$PID" ]; then
             echo -e "PID:          ${PID}"
         fi
@@ -364,7 +369,7 @@ do_status() {
 
     echo ""
     echo -e "${CYAN}Quick Commands:${NC}"
-    if screen -list 2>/dev/null | grep -q "$SCREEN_NAME"; then
+    if is_server_running; then
         echo -e "Stop:         ${CYAN}sudo bash palworld.sh stop${NC}"
         echo -e "Restart:      ${CYAN}sudo bash palworld.sh restart${NC}"
         echo -e "Console:      ${CYAN}screen -r $SCREEN_NAME${NC}"
@@ -420,7 +425,7 @@ show_menu() {
         show_banner
 
         # Show current status
-        if screen -list 2>/dev/null | grep -q "$SCREEN_NAME"; then
+        if is_server_running; then
             echo -e "Status: ${GREEN}● Running${NC}"
         else
             echo -e "Status: ${RED}● Stopped${NC}"
@@ -448,11 +453,14 @@ show_menu() {
         echo "  10) Edit Server Config"
         echo "  11) Show Server Info"
         echo ""
+        echo -e "${MAGENTA}Web Interface:${NC}"
+        echo "  12) 🌐 Launch Web Dashboard"
+        echo ""
         echo -e "${RED}Other:${NC}"
-        echo "  12) Uninstall Server"
+        echo "  13) Uninstall Server"
         echo "  0) Exit"
         echo ""
-        read -p "Enter your choice [0-12]: " choice
+        read -p "Enter your choice [0-13]: " choice
 
         case $choice in
             1) do_start; read -p "Press Enter to continue..." ;;
@@ -474,7 +482,8 @@ show_menu() {
                 fi
                 ;;
             11) do_status; read -p "Press Enter to continue..." ;;
-            12)
+            12) check_root; do_dashboard ;;
+            13)
                 echo -e "${RED}⚠ WARNING: This will delete the server!${NC}"
                 read -p "Type 'yes' to confirm: " confirm
                 if [ "$confirm" = "yes" ]; then
@@ -490,78 +499,54 @@ show_menu() {
     done
 }
 
-# Show help
-show_help() {
-    echo "Palworld Dedicated Server - All-in-One Manager"
+# Start web dashboard
+do_dashboard() {
+    echo -e "${BLUE}🌐 Starting Web Dashboard...${NC}"
     echo ""
-    echo "Usage: sudo bash palworld.sh [command]"
+
+    # Check if Python3 is installed
+    if ! command -v python3 > /dev/null 2>&1; then
+        echo -e "${RED}✗ Python3 not found${NC}"
+        echo "Installing Python3..."
+        apt-get update -qq
+        apt-get install -y python3 > /dev/null 2>&1
+    fi
+
+    # Check if dashboard.py exists
+    DASHBOARD_FILE="${STEAM_HOME}/dashboard.py"
+    if [ ! -f "$DASHBOARD_FILE" ]; then
+        echo -e "${RED}✗ dashboard.py not found at ${DASHBOARD_FILE}${NC}"
+        echo "Please download it from the repository"
+        exit 1
+    fi
+
+    # Open dashboard port
+    echo "Opening port 8080 for dashboard..."
+    if command -v ufw > /dev/null 2>&1; then
+        ufw allow 8080/tcp comment 'Palworld Dashboard' 2>/dev/null || true
+    elif command -v iptables > /dev/null 2>&1; then
+        iptables -C INPUT -p tcp --dport 8080 -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport 8080 -j ACCEPT
+    fi
+
     echo ""
-    echo "Commands:"
-    echo "  install       Full installation (SteamCMD + Palworld)"
-    echo "  start         Start the server"
-    echo "  stop          Stop the server"
-    echo "  restart       Restart the server"
-    echo "  status        Show server status"
-    echo "  update        Update server to latest version"
-    echo "  console       Attach to server console"
-    echo "  logs          View server logs (tail -f)"
-    echo "  ports         Open firewall ports"
-    echo "  menu          Show interactive menu (default)"
-    echo "  help          Show this help"
+    echo -e "${GREEN}✓ Dashboard starting...${NC}"
     echo ""
-    echo "Examples:"
-    echo "  sudo bash palworld.sh install    # First time installation"
-    echo "  sudo bash palworld.sh start      # Start server"
-    echo "  sudo bash palworld.sh status     # Check if running"
-    echo "  sudo bash palworld.sh menu       # Interactive menu"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}🌐 Web Dashboard Access:${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
+    echo -e "  URL:      ${CYAN}http://YOUR_SERVER_IP:8080${NC}"
+    echo -e "  Password: ${YELLOW}admin${NC} (default - change in dashboard.py)"
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "${YELLOW}Press Ctrl+C to stop the dashboard${NC}"
+    echo ""
+
+    # Run dashboard
+    cd "$STEAM_HOME"
+    python3 dashboard.py
 }
 
-# Main logic
-main() {
-    case "${1:-menu}" in
-        install)
-            do_install
-            ;;
-        start)
-            do_start
-            ;;
-        stop)
-            do_stop
-            ;;
-        restart)
-            do_restart
-            ;;
-        status)
-            do_status
-            ;;
-        update)
-            do_update
-            ;;
-        console)
-            do_console
-            ;;
-        logs)
-            do_logs
-            ;;
-        ports)
-            check_root
-            auto_open_ports
-            ;;
-        menu)
-            show_menu
-            ;;
-        help|--help|-h)
-            show_help
-            ;;
-        *)
-            echo -e "${RED}Unknown command: $1${NC}"
-            echo ""
-            show_help
-            exit 1
-            ;;
-    esac
-}
-
-# Run main
-main "$@"
+# Main - just launch the menu
+show_menu
