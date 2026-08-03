@@ -2,7 +2,9 @@
 #
 # Palworld Dedicated Server - All-in-One Manager
 # Repository: https://github.com/thinhngotony/palworldx
-# Usage: sudo bash palworld.sh [command]
+# Usage: sudo bash palworld.sh [command] [--yes]
+# Lifecycle commands stop/restart/update prompt before interrupting a running server.
+# For automation, pass --yes only after independently verifying interruption is safe.
 #
 
 set -e
@@ -63,6 +65,50 @@ check_steam_user() {
 # Check if server screen session is running (works from any user)
 is_server_running() {
     su - $STEAM_USER -c "screen -list 2>/dev/null" | grep -q "$SCREEN_NAME"
+}
+
+# Serialize operations that can change the server lifecycle.
+LIFECYCLE_LOCK_FILE="${STEAM_HOME}/.palworld-lifecycle.lock"
+acquire_lifecycle_lock() {
+    exec 9>"$LIFECYCLE_LOCK_FILE"
+    if ! flock -n 9; then
+        echo -e "${YELLOW}⚠ Another server lifecycle operation is already running${NC}" >&2
+        exec 9>&-
+        return 1
+    fi
+}
+
+release_lifecycle_lock() {
+    flock -u 9 2>/dev/null || true
+    exec 9>&-
+}
+
+# Interrupting operations require an explicit confirmation. Use --yes only for
+# automated callers that have independently verified it is safe to interrupt.
+confirm_lifecycle_interrupt() {
+    local operation="$1"
+    local confirmation_mode="${2:-}"
+
+    if ! screen -list 2>/dev/null | grep -q "$SCREEN_NAME"; then
+        return 0
+    fi
+
+    if [ "$confirmation_mode" = "--yes" ]; then
+        echo -e "${YELLOW}Proceeding with $operation because --yes was explicitly supplied.${NC}"
+        return 0
+    fi
+
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        echo -e "${RED}✗ Refusing to interrupt the running server non-interactively.${NC}" >&2
+        echo "Use '$0 $operation --yes' only after verifying interruption is safe." >&2
+        return 1
+    fi
+
+    read -r -p "The server is running and will be interrupted by $operation. Type 'yes' to continue: " confirmation
+    if [ "$confirmation" != "yes" ]; then
+        echo -e "${YELLOW}Operation cancelled.${NC}"
+        return 1
+    fi
 }
 
 # Detect OS
@@ -241,16 +287,23 @@ do_install() {
 
 # Start server
 do_start() {
-    check_steam_user start
+    local internal="${1:-}"
+    check_steam_user start "$internal"
+
+    if [ "$internal" != "--internal" ]; then
+        acquire_lifecycle_lock || exit 1
+    fi
 
     if screen -list | grep -q "$SCREEN_NAME"; then
         echo -e "${YELLOW}⚠ Server is already running${NC}"
-        exit 0
+        [ "$internal" != "--internal" ] && release_lifecycle_lock
+        return 0
     fi
 
     if [ ! -d "$PALWORLD_DIR" ]; then
         echo -e "${RED}✗ Server not installed. Run: sudo bash palworld.sh install${NC}"
-        exit 1
+        [ "$internal" != "--internal" ] && release_lifecycle_lock
+        return 1
     fi
 
     echo -e "${BLUE}🚀 Starting Palworld server...${NC}"
@@ -272,11 +325,23 @@ do_start() {
 
 # Stop server
 do_stop() {
-    check_steam_user stop
+    local confirmation_mode="${1:-}"
+    local internal="${2:-}"
+    check_steam_user stop "$confirmation_mode" "$internal"
+
+    if [ "$internal" != "--internal" ]; then
+        acquire_lifecycle_lock || exit 1
+    fi
 
     if ! screen -list | grep -q "$SCREEN_NAME"; then
         echo -e "${YELLOW}⚠ Server is not running${NC}"
-        exit 0
+        [ "$internal" != "--internal" ] && release_lifecycle_lock
+        return 0
+    fi
+
+    if [ "$confirmation_mode" != "--confirmed" ] && ! confirm_lifecycle_interrupt "stop" "$confirmation_mode"; then
+        [ "$internal" != "--internal" ] && release_lifecycle_lock
+        return 1
     fi
 
     echo -e "${BLUE}🛑 Stopping Palworld server...${NC}"
@@ -287,25 +352,40 @@ do_stop() {
         echo -e "${GREEN}✓ Server stopped${NC}"
     else
         echo -e "${RED}✗ Failed to stop server${NC}"
-        exit 1
+        return 1
     fi
 }
 
 # Restart server
 do_restart() {
+    local confirmation_mode="${1:-}"
+    check_steam_user restart "$confirmation_mode"
+    acquire_lifecycle_lock || exit 1
+    trap release_lifecycle_lock RETURN
+
+    if ! confirm_lifecycle_interrupt "restart" "$confirmation_mode"; then
+        return 1
+    fi
+
     echo -e "${BLUE}🔄 Restarting Palworld server...${NC}"
-    do_stop
+    do_stop --confirmed --internal
     sleep 3
-    do_start
+    do_start --internal
 }
 
 # Update server
 do_update() {
-    check_steam_user update
+    local confirmation_mode="${1:-}"
+    check_steam_user update "$confirmation_mode"
+    acquire_lifecycle_lock || exit 1
+    trap release_lifecycle_lock RETURN
+
+    if ! confirm_lifecycle_interrupt "update" "$confirmation_mode"; then
+        return 1
+    fi
 
     echo -e "${BLUE}📥 Updating Palworld server...${NC}"
 
-    # Stop if running
     if screen -list | grep -q "$SCREEN_NAME"; then
         echo "  Stopping server..."
         screen -S "$SCREEN_NAME" -X quit
@@ -548,5 +628,15 @@ do_dashboard() {
     python3 dashboard.py
 }
 
-# Main - just launch the menu
-show_menu
+# Command-line lifecycle commands retain the existing menu for all other invocations.
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        start) do_start "${2:-}" ;;
+        stop) do_stop "${2:-}" ;;
+        restart) do_restart "${2:-}" ;;
+        update) do_update "${2:-}" ;;
+        *) show_menu ;;
+    esac
+else
+    show_menu
+fi

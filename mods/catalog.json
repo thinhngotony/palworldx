@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "description": "Curated initial metadata only; no entries imply that a download or server installation is safe.",
+  "mods": [
+    {
+      "id": "automatically-skip-mod-caution",
+      "name": "AutomaticallySkipModCaution",
+      "scope": "client",
+      "uncertainty": "likely",
+      "install_method": "client-manual",
+      "server_install_allowed": false,
+      "notes": "Likely client-only; do not install on a dedicated server automatically."
+    },
+    {
+      "id": "smaller-plantations",
+      "name": "Smaller Plantations",
+      "scope": "unknown",
+      "uncertainty": "high",
+      "install_method": "manual-review",
+      "server_install_allowed": false,
+      "notes": "Multiplayer support is unclear; manual review required."
+    },
+    {
+      "id": "currencies-keys-more-key-items",
+      "name": "Currencies, Keys and More are Key Items",
+      "scope": "unknown",
+      "uncertainty": "high",
+      "install_method": "manual-review",
+      "server_install_allowed": false,
+      "notes": "Dedicated-server support is unresolved; blocked by default."
+    },
+    {
+      "id": "dungeon-boss-respawn-map-timer",
+      "name": "Dungeon Boss Respawn Map Timer",
+      "scope": "client",
+      "uncertainty": "medium",
+      "install_method": "client-manual",
+      "server_install_allowed": false,
+      "notes": "Client instructions only."
+    },
+    {
+      "id": "less-restrictive-building",
+      "name": "Less Restrictive Building",
+      "scope": "both",
+      "uncertainty": "medium",
+      "install_method": "pak-or-ue4ss",
+      "server_install_allowed": false,
+      "notes": "Package-dependent; require explicit PAK/UE4SS selection."
+    },
+    {
+      "id": "palpriority",
+      "name": "PalPriority",
+      "scope": "both",
+      "uncertainty": "medium",
+      "install_method": "split-core-and-client-ui",
+      "server_install_allowed": false,
+      "notes": "Server core plus optional client UI; package boundaries require review."
+    },
+    {
+      "id": "building-enhanced-free-camera",
+      "name": "Building Enhanced / Free Camera",
+      "scope": "client",
+      "uncertainty": "medium",
+      "install_method": "client-manual",
+      "server_install_allowed": false,
+      "notes": "Client-only; client instructions only."
+    },
+    {
+      "id": "nexus-550",
+      "name": "Nexus reference 550",
+      "scope": "unknown",
+      "uncertainty": "unverified",
+      "install_method": "manual-review",
+      "server_install_allowed": false,
+      "notes": "Unresolved reference; automatic installation blocked."
+    },
+    {
+      "id": "nexus-3915",
+      "name": "Nexus reference 3915",
+      "scope": "unknown",
+      "uncertainty": "unverified",
+      "install_method": "manual-review",
+      "server_install_allowed": false,
+      "notes": "Unresolved reference; automatic installation blocked."
+    },
+    {
+      "id": "nexus-214",
+      "name": "Nexus reference 214",
+      "scope": "unknown",
+      "uncertainty": "unverified",
+      "install_method": "manual-review",
+      "server_install_allowed": false,
+      "notes": "Unresolved reference; automatic installation blocked."
+    },
+    {
+      "id": "nexus-190",
+      "name": "Nexus reference 190",
+      "scope": "unknown",
+      "uncertainty": "unverified",
+      "install_method": "manual-review",
+      "server_install_allowed": false,
+      "notes": "Unresolved reference; automatic installation blocked."
+    },
+    {
+      "id": "dungeon-boss-respawn-map-timer-duplicate",
+      "name": "Dungeon Boss Respawn Map Timer (duplicate reference)",
+      "canonical_id": "dungeon-boss-respawn-map-timer",
+      "scope": "client",
+      "uncertainty": "medium",
+      "install_method": "alias",
+      "server_install_allowed": false,
+      "notes": "Duplicate reference canonicalized to the entry for #4."
+    }
+  ],
+  "duplicate_references": {
+    "4": "dungeon-boss-respawn-map-timer",
+    "7": "dungeon-boss-respawn-map-timer"
+  }
+}

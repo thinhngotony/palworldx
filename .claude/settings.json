@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Inspect the Bash command in $ARGUMENTS. If it could stop, restart, update, uninstall, kill, or otherwise interrupt the Palworld production server, require explicit confirmation from the user in the current conversation. Deny the tool call if confirmation is absent. Read-only status, logs, syntax checks, tests, and git operations are allowed.",
+            "timeout": 30,
+            "statusMessage": "Checking production server safety"
+          }
+        ]
+      }
+    ]
+  }
+}
