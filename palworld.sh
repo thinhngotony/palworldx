@@ -19,12 +19,83 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Configuration
+#
+# Defaults are intentionally preserved. Deployments may provide a root-owned,
+# line-oriented config at /etc/palworld/palworld.conf or use PALWORLD_* env vars.
+# Values are parsed as data (never eval'd), then validated before use.
+CONFIG_FILE="${PALWORLD_CONFIG_FILE:-/etc/palworld/palworld.conf}"
 STEAM_USER="steam"
-STEAM_HOME="/home/${STEAM_USER}"
-STEAMCMD_DIR="${STEAM_HOME}/steamcmd"
-PALWORLD_DIR="${STEAM_HOME}/palworld-server"
+STEAM_HOME="/home/steam"
+STEAMCMD_DIR="/home/steam/steamcmd"
+PALWORLD_DIR="/home/steam/palworld-server"
 SCREEN_NAME="palworld"
+DASHBOARD_PORT="8080"
+DASHBOARD_FILE="/home/steam/dashboard.py"
+LIFECYCLE_LOCK_FILE="/home/steam/.palworld-lifecycle.lock"
 APP_ID="2394010"
+
+load_deployment_config() {
+    local line key value
+    [ -e "$CONFIG_FILE" ] || return 0
+    [ -f "$CONFIG_FILE" ] && [ -r "$CONFIG_FILE" ] || { echo "Configuration must be a readable regular file: $CONFIG_FILE" >&2; return 1; }
+    if [ "${CONFIG_FILE#/etc/}" != "$CONFIG_FILE" ] && [ "$(stat -c '%U' "$CONFIG_FILE" 2>/dev/null)" != "root" ]; then
+        echo "Configuration under /etc must be owned by root: $CONFIG_FILE" >&2
+        return 1
+    fi
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line#${line%%[![:space:]]*}}"
+        [ -z "$line" ] || [ "${line:0:1}" = "#" ] && continue
+        if [[ "$line" != *=* ]]; then
+            echo "Invalid configuration line in $CONFIG_FILE" >&2
+            return 1
+        fi
+        key="${line%%=*}"
+        value="${line#*=}"
+        value="${value#${value%%[![:space:]]*}}"
+        value="${value%${value##*[![:space:]]}}"
+        case "$value" in
+            \"*\") value="${value:1:${#value}-2}" ;;
+            \'*\') value="${value:1:${#value}-2}" ;;
+        esac
+        case "$key" in
+            STEAM_USER) STEAM_USER="$value" ;;
+            STEAM_HOME) STEAM_HOME="$value" ;;
+            STEAMCMD_DIR) STEAMCMD_DIR="$value" ;;
+            PALWORLD_DIR) PALWORLD_DIR="$value" ;;
+            SCREEN_NAME) SCREEN_NAME="$value" ;;
+            DASHBOARD_PORT) DASHBOARD_PORT="$value" ;;
+            DASHBOARD_FILE) DASHBOARD_FILE="$value" ;;
+            LIFECYCLE_LOCK_FILE) LIFECYCLE_LOCK_FILE="$value" ;;
+            APP_ID) APP_ID="$value" ;;
+            *) echo "Unknown configuration key '$key' in $CONFIG_FILE" >&2; return 1 ;;
+        esac
+    done < "$CONFIG_FILE"
+}
+
+validate_deployment_config() {
+    local path
+    [[ "$STEAM_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || { echo "Invalid STEAM_USER" >&2; return 1; }
+    [[ "$SCREEN_NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Invalid SCREEN_NAME" >&2; return 1; }
+    [[ "$APP_ID" =~ ^[0-9]+$ ]] || { echo "Invalid APP_ID" >&2; return 1; }
+    [[ "$DASHBOARD_PORT" =~ ^[0-9]+$ ]] && [ "$DASHBOARD_PORT" -ge 1 ] && [ "$DASHBOARD_PORT" -le 65535 ] || { echo "Invalid DASHBOARD_PORT" >&2; return 1; }
+    for path in "$STEAM_HOME" "$STEAMCMD_DIR" "$PALWORLD_DIR" "$DASHBOARD_FILE" "$LIFECYCLE_LOCK_FILE"; do
+        [[ "$path" = /* && "$path" != *$'\n'* && "$path" != *$'\r'* ]] || { echo "Invalid runtime path: $path" >&2; return 1; }
+    done
+}
+
+load_deployment_config
+# Environment variables override the deployment file, which makes one-off
+# read-only discovery/status checks possible without editing production config.
+[ -n "${PALWORLD_STEAM_USER:-}" ] && STEAM_USER="$PALWORLD_STEAM_USER"
+[ -n "${PALWORLD_STEAM_HOME:-}" ] && STEAM_HOME="$PALWORLD_STEAM_HOME"
+[ -n "${PALWORLD_STEAMCMD_DIR:-}" ] && STEAMCMD_DIR="$PALWORLD_STEAMCMD_DIR"
+[ -n "${PALWORLD_SERVER_ROOT:-}" ] && PALWORLD_DIR="$PALWORLD_SERVER_ROOT"
+[ -n "${PALWORLD_SCREEN_NAME:-}" ] && SCREEN_NAME="$PALWORLD_SCREEN_NAME"
+[ -n "${PALWORLD_DASHBOARD_PORT:-}" ] && DASHBOARD_PORT="$PALWORLD_DASHBOARD_PORT"
+[ -n "${PALWORLD_DASHBOARD_FILE:-}" ] && DASHBOARD_FILE="$PALWORLD_DASHBOARD_FILE"
+[ -n "${PALWORLD_LIFECYCLE_LOCK_FILE:-}" ] && LIFECYCLE_LOCK_FILE="$PALWORLD_LIFECYCLE_LOCK_FILE"
+validate_deployment_config
 
 # Required ports
 declare -A PORTS=(
@@ -64,11 +135,10 @@ check_steam_user() {
 
 # Check if server screen session is running (works from any user)
 is_server_running() {
-    su - $STEAM_USER -c "screen -list 2>/dev/null" | grep -q "$SCREEN_NAME"
+    su - "$STEAM_USER" -c "screen -list 2>/dev/null" | grep -Eq "[.]${SCREEN_NAME}[[:space:]]+(Detached|Attached)"
 }
 
 # Serialize operations that can change the server lifecycle.
-LIFECYCLE_LOCK_FILE="${STEAM_HOME}/.palworld-lifecycle.lock"
 acquire_lifecycle_lock() {
     exec 9>"$LIFECYCLE_LOCK_FILE"
     if ! flock -n 9; then
@@ -89,7 +159,7 @@ confirm_lifecycle_interrupt() {
     local operation="$1"
     local confirmation_mode="${2:-}"
 
-    if ! screen -list 2>/dev/null | grep -q "$SCREEN_NAME"; then
+    if ! screen -list 2>/dev/null | grep -Eq "[.]${SCREEN_NAME}[[:space:]]+(Detached|Attached)"; then
         return 0
     fi
 
@@ -294,7 +364,7 @@ do_start() {
         acquire_lifecycle_lock || exit 1
     fi
 
-    if screen -list | grep -q "$SCREEN_NAME"; then
+    if is_server_running; then
         echo -e "${YELLOW}⚠ Server is already running${NC}"
         [ "$internal" != "--internal" ] && release_lifecycle_lock
         return 0
@@ -311,7 +381,7 @@ do_start() {
     screen -dmS "$SCREEN_NAME" ./PalServer.sh
     sleep 2
 
-    if screen -list | grep -q "$SCREEN_NAME"; then
+    if is_server_running; then
         echo -e "${GREEN}✓ Server started successfully!${NC}"
         echo ""
         echo -e "View console:  ${CYAN}screen -r $SCREEN_NAME${NC}"
@@ -333,7 +403,7 @@ do_stop() {
         acquire_lifecycle_lock || exit 1
     fi
 
-    if ! screen -list | grep -q "$SCREEN_NAME"; then
+    if ! is_server_running; then
         echo -e "${YELLOW}⚠ Server is not running${NC}"
         [ "$internal" != "--internal" ] && release_lifecycle_lock
         return 0
@@ -348,7 +418,7 @@ do_stop() {
     screen -S "$SCREEN_NAME" -X quit
     sleep 2
 
-    if ! screen -list | grep -q "$SCREEN_NAME"; then
+    if ! is_server_running; then
         echo -e "${GREEN}✓ Server stopped${NC}"
     else
         echo -e "${RED}✗ Failed to stop server${NC}"
@@ -386,7 +456,7 @@ do_update() {
 
     echo -e "${BLUE}📥 Updating Palworld server...${NC}"
 
-    if screen -list | grep -q "$SCREEN_NAME"; then
+    if is_server_running; then
         echo "  Stopping server..."
         screen -S "$SCREEN_NAME" -X quit
         sleep 3
@@ -425,7 +495,7 @@ do_status() {
         echo -e "Screen:       ${SCREEN_NAME}"
 
         # Try to get process info
-        PID=$(su - $STEAM_USER -c "screen -list" | grep "$SCREEN_NAME" | awk -F'[.]' '{print $1}' | tr -d '[:space:]')
+        PID=$(su - "$STEAM_USER" -c "screen -list" | grep -E "[.]${SCREEN_NAME}[[:space:]]+(Detached|Attached)" | awk -F'[.]' '{print $1}' | tr -d '[:space:]')
         if [ -n "$PID" ]; then
             echo -e "PID:          ${PID}"
         fi
@@ -488,7 +558,7 @@ do_logs() {
 do_console() {
     check_steam_user console
 
-    if ! screen -list | grep -q "$SCREEN_NAME"; then
+    if ! is_server_running; then
         echo -e "${RED}✗ Server is not running${NC}"
         exit 1
     fi
@@ -593,7 +663,6 @@ do_dashboard() {
     fi
 
     # Check if dashboard.py exists
-    DASHBOARD_FILE="${STEAM_HOME}/dashboard.py"
     if [ ! -f "$DASHBOARD_FILE" ]; then
         echo -e "${RED}✗ dashboard.py not found at ${DASHBOARD_FILE}${NC}"
         echo "Please download it from the repository"
@@ -601,11 +670,11 @@ do_dashboard() {
     fi
 
     # Open dashboard port
-    echo "Opening port 8080 for dashboard..."
+    echo "Opening port ${DASHBOARD_PORT} for dashboard..."
     if command -v ufw > /dev/null 2>&1; then
-        ufw allow 8080/tcp comment 'Palworld Dashboard' 2>/dev/null || true
+        ufw allow "${DASHBOARD_PORT}/tcp" comment 'Palworld Dashboard' 2>/dev/null || true
     elif command -v iptables > /dev/null 2>&1; then
-        iptables -C INPUT -p tcp --dport 8080 -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport 8080 -j ACCEPT
+        iptables -C INPUT -p tcp --dport "$DASHBOARD_PORT" -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport "$DASHBOARD_PORT" -j ACCEPT
     fi
 
     echo ""
@@ -615,7 +684,7 @@ do_dashboard() {
     echo -e "${GREEN}🌐 Web Dashboard Access:${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "  URL:      ${CYAN}http://YOUR_SERVER_IP:8080${NC}"
+    echo -e "  URL:      ${CYAN}http://YOUR_SERVER_IP:${DASHBOARD_PORT}${NC}"
     echo -e "  Password: ${YELLOW}admin${NC} (default - change in dashboard.py)"
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -624,8 +693,30 @@ do_dashboard() {
     echo ""
 
     # Run dashboard
-    cd "$STEAM_HOME"
-    python3 dashboard.py
+    cd "$(dirname "$DASHBOARD_FILE")"
+    python3 - "$DASHBOARD_PORT" "$DASHBOARD_FILE" <<'PY'
+import importlib.util
+import sys
+
+port = int(sys.argv[1])
+module_path = sys.argv[2]
+spec = importlib.util.spec_from_file_location("palworld_dashboard", module_path)
+dashboard = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(dashboard)
+dashboard.DASHBOARD_PORT = port
+server = dashboard.ThreadedHTTPServer(("0.0.0.0", port), dashboard.DashboardHandler)
+try:
+    server.serve_forever()
+except KeyboardInterrupt:
+    server.server_close()
+PY
+}
+
+# Read-only discovery/status commands do not acquire lifecycle locks or change state.
+do_discover() {
+    printf 'steam_user=%s\nsteam_home=%s\nsteamcmd_dir=%s\nserver_root=%s\nscreen_name=%s\ndashboard_port=%s\ndashboard_file=%s\nlifecycle_lock=%s\ninstalled=%s\nrunning=%s\n' \
+        "$STEAM_USER" "$STEAM_HOME" "$STEAMCMD_DIR" "$PALWORLD_DIR" "$SCREEN_NAME" "$DASHBOARD_PORT" "$DASHBOARD_FILE" "$LIFECYCLE_LOCK_FILE" \
+        "$([ -d "$PALWORLD_DIR" ] && printf true || printf false)" "$(if is_server_running; then printf true; else printf false; fi)"
 }
 
 # Command-line lifecycle commands retain the existing menu for all other invocations.
@@ -635,6 +726,8 @@ if [ "$#" -gt 0 ]; then
         stop) do_stop "${2:-}" ;;
         restart) do_restart "${2:-}" ;;
         update) do_update "${2:-}" ;;
+        status) do_status ;;
+        discover|config) do_discover ;;
         *) show_menu ;;
     esac
 else

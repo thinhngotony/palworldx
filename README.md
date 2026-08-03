@@ -240,7 +240,25 @@ Restart after changes:
 sudo bash palworld.sh restart
 ```
 
+## Production Configuration and Discovery
+
+The manager preserves the defaults below while allowing a root-owned configuration file at `/etc/palworld/palworld.conf` (override with `PALWORLD_CONFIG_FILE`) or validated one-off environment overrides:
+
+```ini
+STEAM_USER=steam
+STEAM_HOME=/home/steam
+STEAMCMD_DIR=/home/steam/steamcmd
+PALWORLD_DIR=/home/steam/palworld-server
+SCREEN_NAME=palworld
+DASHBOARD_PORT=8080
+DASHBOARD_FILE=/home/steam/dashboard.py
+LIFECYCLE_LOCK_FILE=/home/steam/.palworld-lifecycle.lock
+```
+
+Values are parsed as `KEY=value`, not evaluated as shell code. Paths must be absolute; the deployment file must be a regular root-owned file. Use `sudo bash palworld.sh discover` for read-only resolved configuration and installation/running state. `status` is also read-only and uses the configured server root, screen name, and runtime paths.
+
 ## Production Safety
+
 
 Lifecycle operations (stop, restart, update) always require explicit confirmation when the server is running.
 
