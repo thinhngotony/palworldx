@@ -14,6 +14,11 @@ import time
 import threading
 import urllib.parse
 import importlib
+import mimetypes
+import tempfile
+from email.parser import BytesParser
+from email.policy import default as email_policy
+from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from http.cookies import SimpleCookie
 from datetime import datetime
@@ -277,6 +282,27 @@ def get_mod(mod_id):
         if str(item.get('id', '')) == mod_id:
             return item
     return None
+
+
+def _backend_call(names, *args, **kwargs):
+    """Call an optional backend contract method, preserving graceful absence."""
+    result = _mod_manager_call(names, *args, **kwargs)
+    return json_safe(result) if result is not None else None
+
+
+def get_mod_operations():
+    return _backend_call(('list_operations', 'get_operations', 'operation_history')) or []
+
+
+def get_mod_backups():
+    return _backend_call(('list_mod_backups', 'get_mod_backups', 'backup_list')) or []
+
+
+def get_client_instructions(mod_id):
+    mod = get_mod(mod_id)
+    if not mod:
+        return None
+    return mod.get('client_instructions', mod.get('client', mod.get('instructions', [])))
 
 
 def get_network_info():
@@ -795,9 +821,15 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 <div class="header-actions"><button class="btn-refresh" onclick="refreshMods()">&#x21bb; Refresh</button></div>
 </div>
 <div class="card">
-<div class="card-header"><span class="card-title">Installed Mods</span></div>
+<div class="card-header"><span class="card-title">Mod packages</span><button class="btn-refresh" onclick="refreshModOperations()">Operations</button></div>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+<input id="modUpload" type="file" accept=".zip" style="color:var(--text-secondary);font-size:13px">
+<button class="btn-save" onclick="uploadMod()">Upload for inspection</button>
+</div>
 <div id="modList"><p style="color:var(--text-muted);font-size:13px">Loading...</p></div>
-<p style="color:var(--text-muted);font-size:12px;margin-top:16px">Mod changes require explicit maintenance confirmation and are never applied automatically.</p>
+<div id="modPreview" style="margin-top:16px"></div>
+<div id="modOperations" style="margin-top:16px"></div>
+<p style="color:var(--text-muted);font-size:12px;margin-top:16px">Uploads are staged and inspected before applying. Every upload or apply requires a fresh maintenance confirmation; the dashboard never interrupts the server without confirmation.</p>
 </div>
 </div>
 
@@ -1070,16 +1102,29 @@ function refreshMods() {
   api('/api/mods').then(data => {
     const el = document.getElementById('modList');
     const mods = data.mods || [];
-    if(!mods.length) { el.textContent = data.available === false ? 'mod_manager is not available.' : 'No mods found.'; return; }
+    if(!mods.length) { el.textContent = data.available === false ? 'Mod backend is unavailable.' : 'No catalog mods found.'; return; }
     el.innerHTML = '';
     mods.forEach(mod => {
       const row = document.createElement('div'); row.className = 'info-row';
       const label = document.createElement('span'); label.className = 'info-label'; label.textContent = mod.name || mod.id || 'Unnamed mod';
-      const value = document.createElement('span'); value.className = 'info-value'; value.textContent = mod.version || mod.status || mod.id || '--';
-      row.appendChild(label); row.appendChild(value); el.appendChild(row);
+      const value = document.createElement('span'); value.className = 'info-value'; value.textContent = (mod.compatibility || mod.scope || 'unknown')+' · '+(mod.version || mod.status || '--');
+      row.appendChild(label); row.appendChild(value);
+      if(mod.id) { const b=document.createElement('button'); b.className='btn-refresh'; b.textContent='Instructions'; b.onclick=()=>showInstructions(mod.id); row.appendChild(b); }
+      el.appendChild(row);
     });
-  }).catch(e => console.error('Mods fetch error:', e));
+  }).catch(e => { document.getElementById('modList').textContent='Mods unavailable: '+e.message; });
 }
+function showInstructions(id) { api('/api/mods/'+encodeURIComponent(id)+'/instructions').then(d => { document.getElementById('modPreview').textContent=JSON.stringify(d.instructions || d, null, 2); }); }
+function uploadMod() {
+  const file=document.getElementById('modUpload').files[0]; if(!file) return toast('Choose a ZIP package first','error');
+  if(!confirm('Stage this upload for inspection? A maintenance confirmation is required.')) return;
+  const form=new FormData(); form.append('file',file);
+  api('/api/mods/upload', {method:'POST', body:form}).then(d=>{
+    if(d.requires_confirmation) { if(confirm(d.message+' Continue?')) { return api('/api/mods/upload',{method:'POST',headers:{'X-Maintenance-Confirmation':d.confirmation_token},body:form}); } return d; }
+    return d;
+  }).then(d=>{ if(d.success) { toast('Upload staged','success'); document.getElementById('modPreview').textContent=JSON.stringify(d.preview || d.result || d,null,2); } else toast(d.message||'Upload failed','error'); }).catch(e=>toast('Upload unavailable: '+e.message,'error'));
+}
+function refreshModOperations() { Promise.all([api('/api/operations'),api('/api/mod-backups')]).then(([ops,backs])=>{ document.getElementById('modOperations').textContent=JSON.stringify({operations:ops.operations||[],backups:backs.backups||[]},null,2); }).catch(e=>document.getElementById('modOperations').textContent='Operations unavailable: '+e.message); }
 
 // ─── Refresh all ───
 function refreshAll() { refreshStats(); }
@@ -1127,7 +1172,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         return data if isinstance(data, dict) else None
 
     def maintenance_confirmed(self, data):
-        token = data.get('maintenance_confirmation', '') if isinstance(data, dict) else ''
+        token = self.headers.get('X-Maintenance-Confirmation', '')
+        if not token:
+            token = data.get('maintenance_confirmation', '') if isinstance(data, dict) else ''
         if not isinstance(token, str) or not token:
             return False
         created = maintenance_confirmations.get(token)
@@ -1180,6 +1227,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif path == '/api/backups':
             self.send_json({'backups': get_backup_list()})
 
+        elif path == '/api/operations':
+            self.send_json({'available': mod_manager is not None, 'operations': get_mod_operations()})
+
+        elif path == '/api/mod-backups':
+            self.send_json({'available': mod_manager is not None, 'backups': get_mod_backups()})
+
         elif path == '/api/network':
             self.send_json({'network': get_network_info()})
 
@@ -1187,9 +1240,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.send_json({'available': mod_manager is not None, 'mods': get_mods()})
 
         elif path.startswith('/api/mods/'):
-            mod_id = urllib.parse.unquote(path[len('/api/mods/'):])
-            mod = get_mod(mod_id)
-            self.send_json({'mod': mod} if mod is not None else {'error': 'Mod not found'}, 200 if mod is not None else 404)
+            suffix = path[len('/api/mods/'):]
+            if suffix.endswith('/instructions'):
+                mod_id = urllib.parse.unquote(suffix[:-len('/instructions')].rstrip('/'))
+                instructions = get_client_instructions(mod_id)
+                self.send_json({'instructions': instructions} if instructions is not None else {'error': 'Mod not found'}, 200 if instructions is not None else 404)
+            else:
+                mod_id = urllib.parse.unquote(suffix)
+                mod = get_mod(mod_id)
+                self.send_json({'mod': mod} if mod is not None else {'error': 'Mod not found'}, 200 if mod is not None else 404)
 
         else:
             self.send_response(404)
@@ -1200,7 +1259,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if content_length > 1024 * 1024:
             self.send_json({'success': False, 'message': 'Request too large'}, 413)
             return
-        body = self.rfile.read(content_length).decode('utf-8', errors='replace') if content_length > 0 else ''
+        raw_body = self.rfile.read(content_length) if content_length > 0 else b''
+        body = raw_body.decode('utf-8', errors='replace')
         path = urllib.parse.urlparse(self.path).path
 
         if path == '/login':
@@ -1224,6 +1284,40 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # All other POST endpoints require auth
         if not self.is_authenticated():
             self.send_json({'error': 'Unauthorized'}, 401)
+            return
+
+        if path in ('/api/mods/inspect', '/api/mods/preview'):
+            data = self.read_json(body) or {}
+            source = data.get('path') or data.get('upload') or data.get('archive')
+            result = _backend_call(('inspect_upload', 'inspect_archive', 'preview_upload', 'preview'), source) if source else None
+            self.send_json({'success': result is not None, 'preview': result or {}, 'message': 'Inspection backend unavailable' if result is None else 'Inspection complete'}, 503 if result is None else 200)
+            return
+
+        if path == '/api/mods/upload':
+            if not self.maintenance_confirmed(self.read_json(body) or {}):
+                token = secrets.token_urlsafe(24)
+                maintenance_confirmations[token] = time.time()
+                self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token, 'message': 'Maintenance confirmation required before staging an upload'}, 409)
+                return
+            content_type = self.headers.get('Content-Type', '')
+            if not content_type.startswith('multipart/form-data'):
+                self.send_json({'success': False, 'message': 'Expected multipart/form-data'}, 415)
+                return
+            try:
+                boundary = content_type.split('boundary=', 1)[1].strip().strip('"')
+                parsed = BytesParser(policy=email_policy).parsebytes((f'Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n').encode() + raw_body)
+                parts = list(parsed.iter_attachments())
+                upload = next((part for part in parts if part.get_filename()), None)
+                if upload is None or not upload.get_filename().lower().endswith('.zip'):
+                    raise ValueError('A ZIP file is required')
+                staging = Path(PALWORLD_DIR) / '.palworld-mods' / 'staging'
+                staging.mkdir(parents=True, exist_ok=True)
+                target = staging / (secrets.token_hex(12) + '.zip')
+                target.write_bytes(upload.get_payload(decode=True) or b'')
+                preview = _backend_call(('inspect_upload', 'inspect_archive', 'preview_upload'), str(target))
+                self.send_json({'success': True, 'staged': str(target), 'preview': preview or {'file': target.name, 'size': target.stat().st_size}})
+            except Exception as error:
+                self.send_json({'success': False, 'message': str(error)}, 400)
             return
 
         if path == '/api/control':
@@ -1301,6 +1395,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     self.send_json({'success': False})
             except Exception as e:
                 self.send_json({'success': False, 'message': str(e)})
+
+        elif path in ('/api/mods/apply', '/api/mods/rollback'):
+            data = self.read_json(body) or {}
+            if not self.maintenance_confirmed(data):
+                token = secrets.token_urlsafe(24)
+                maintenance_confirmations[token] = time.time()
+                self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token, 'message': 'Maintenance confirmation required before this operation'}, 409)
+                return
+            action = 'apply' if path.endswith('/apply') else 'rollback'
+            result = _backend_call((action, 'apply_operation' if action == 'apply' else 'rollback_operation'), data)
+            self.send_json({'success': result is not None, 'result': result, 'message': 'Backend unavailable' if result is None else action.title() + ' complete'}, 503 if result is None else 200)
 
         elif path.startswith('/api/mods/'):
             parts = path.split('/')
