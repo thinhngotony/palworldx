@@ -9,13 +9,16 @@ import os
 import json
 import subprocess
 import hashlib
+import hmac
 import secrets
+import shlex
 import time
 import threading
 import urllib.parse
 import importlib
 import mimetypes
 import tempfile
+import warnings
 from email.parser import BytesParser
 from email.policy import default as email_policy
 from pathlib import Path
@@ -29,7 +32,29 @@ STEAM_HOME = f"/home/{STEAM_USER}"
 PALWORLD_DIR = f"{STEAM_HOME}/palworld-server"
 SCREEN_NAME = "palworld"
 DASHBOARD_PORT = 8080
-DEFAULT_PASSWORD = "admin"  # Change this!
+
+
+def _load_dashboard_password():
+    """Load a configured password without preventing module imports in development."""
+    configured = os.environ.get('PALWORLD_DASHBOARD_PASSWORD')
+    password_file = os.environ.get('PALWORLD_DASHBOARD_PASSWORD_FILE')
+    if password_file:
+        try:
+            with open(password_file, encoding='utf-8') as stream:
+                configured = stream.read().strip()
+        except OSError as error:
+            warnings.warn(f'Unable to read PALWORLD_DASHBOARD_PASSWORD_FILE: {error}', RuntimeWarning)
+    if configured:
+        return configured, False
+    warnings.warn(
+        'PALWORLD_DASHBOARD_PASSWORD is not configured; using the development-only fallback password. '
+        'Set PALWORLD_DASHBOARD_PASSWORD or PALWORLD_DASHBOARD_PASSWORD_FILE before deployment.',
+        RuntimeWarning,
+    )
+    return 'admin', True
+
+
+DEFAULT_PASSWORD, USING_DEVELOPMENT_PASSWORD = _load_dashboard_password()
 PASSWORD_HASH = hashlib.sha256(DEFAULT_PASSWORD.encode()).hexdigest()
 
 # Session storage
@@ -69,7 +94,7 @@ def validate_session(cookie_header):
 
 
 def run_command(cmd, timeout_sec=10):
-    """Run shell command and return output"""
+    """Run an existing monitoring command, including its intentional pipeline."""
     try:
         result = subprocess.run(
             cmd, shell=True, capture_output=True, text=True, timeout=timeout_sec
@@ -81,16 +106,37 @@ def run_command(cmd, timeout_sec=10):
         return str(e), 1
 
 
+def run_argv(argv, timeout_sec=10, cwd=None):
+    """Run a fixed-argv command without invoking a shell."""
+    try:
+        result = subprocess.run(
+            argv, shell=False, capture_output=True, text=True,
+            timeout=timeout_sec, cwd=cwd
+        )
+        return result.stdout.strip(), result.returncode
+    except subprocess.TimeoutExpired:
+        return "Command timed out", 1
+    except Exception as e:
+        return str(e), 1
+
+
+def run_as_steam(command, timeout_sec=10):
+    """Run a fixed control command as the configured server user."""
+    return run_argv(('su', '-', STEAM_USER, '-c', command), timeout_sec=timeout_sec)
+
+
 def is_server_running():
-    output, _ = run_command(f"su - {STEAM_USER} -c 'screen -list 2>/dev/null' | grep {SCREEN_NAME}")
-    return SCREEN_NAME in output
+    output, _ = run_as_steam('screen -list 2>/dev/null')
+    return any(SCREEN_NAME in line for line in output.splitlines())
 
 
 def get_server_pid():
-    """Get the actual PalServer process PID"""
-    output, code = run_command("pgrep -f PalServer-Linux-Shipping 2>/dev/null || pgrep -f PalServer 2>/dev/null")
+    """Get the actual PalServer process PID."""
+    output, code = run_argv(('pgrep', '-f', 'PalServer-Linux-Shipping'))
+    if code != 0 or not output:
+        output, code = run_argv(('pgrep', '-f', 'PalServer'))
     if code == 0 and output:
-        return output.split('\n')[0].strip()
+        return output.splitlines()[0].strip()
     return None
 
 
@@ -113,10 +159,10 @@ def get_server_stats():
         pid = get_server_pid()
         if pid:
             stats['pid'] = pid
-            cpu_output, _ = run_command(f"ps -p {pid} -o %cpu --no-headers 2>/dev/null")
-            ram_output, _ = run_command(f"ps -p {pid} -o %mem --no-headers 2>/dev/null")
-            rss_output, _ = run_command(f"ps -p {pid} -o rss --no-headers 2>/dev/null")
-            start_output, _ = run_command(f"ps -p {pid} -o etime= 2>/dev/null")
+            cpu_output, _ = run_argv(('ps', '-p', pid, '-o', '%cpu', '--no-headers'))
+            ram_output, _ = run_argv(('ps', '-p', pid, '-o', '%mem', '--no-headers'))
+            rss_output, _ = run_argv(('ps', '-p', pid, '-o', 'rss', '--no-headers'))
+            start_output, _ = run_argv(('ps', '-p', pid, '-o', 'etime='))
 
             try:
                 stats['cpu'] = float(cpu_output.strip())
@@ -1269,7 +1315,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             password = params.get('password', [''])[0]
             password_hash = hashlib.sha256(password.encode()).hexdigest()
 
-            if password_hash == PASSWORD_HASH:
+            if hmac.compare_digest(password_hash, PASSWORD_HASH):
                 sid = generate_session_id()
                 sessions[sid] = {'created': time.time()}
                 self.send_response(302)
@@ -1339,8 +1385,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if is_server_running():
                     self.send_json({'success': False, 'message': 'Server is already running'})
                     return
-                cmd = f"su - {STEAM_USER} -c 'cd {PALWORLD_DIR} && screen -dmS {SCREEN_NAME} ./PalServer.sh'"
-                output, code = run_command(cmd, timeout_sec=15)
+                output, code = run_as_steam(
+                    f'cd {shlex.quote(PALWORLD_DIR)} && screen -dmS {shlex.quote(SCREEN_NAME)} ./PalServer.sh',
+                    timeout_sec=15,
+                )
                 time.sleep(2)
                 running = is_server_running()
                 self.send_json({
@@ -1352,8 +1400,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if not is_server_running():
                     self.send_json({'success': False, 'message': 'Server is not running'})
                     return
-                cmd = f"su - {STEAM_USER} -c 'screen -S {SCREEN_NAME} -X quit'"
-                run_command(cmd)
+                run_as_steam(f'screen -S {shlex.quote(SCREEN_NAME)} -X quit')
                 time.sleep(2)
                 stopped = not is_server_running()
                 self.send_json({
@@ -1364,11 +1411,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             elif action == 'restart':
                 # Stop
                 if is_server_running():
-                    run_command(f"su - {STEAM_USER} -c 'screen -S {SCREEN_NAME} -X quit'")
+                    run_as_steam(f'screen -S {shlex.quote(SCREEN_NAME)} -X quit')
                     time.sleep(3)
                 # Start
-                cmd = f"su - {STEAM_USER} -c 'cd {PALWORLD_DIR} && screen -dmS {SCREEN_NAME} ./PalServer.sh'"
-                run_command(cmd, timeout_sec=15)
+                run_as_steam(
+                    f'cd {shlex.quote(PALWORLD_DIR)} && screen -dmS {shlex.quote(SCREEN_NAME)} ./PalServer.sh',
+                    timeout_sec=15,
+                )
                 time.sleep(2)
                 running = is_server_running()
                 self.send_json({
@@ -1378,8 +1427,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
             elif action == 'update':
                 # Run update in background
-                cmd = f"su - {STEAM_USER} -c 'cd {STEAM_HOME}/steamcmd && ./steamcmd.sh +force_install_dir {PALWORLD_DIR} +login anonymous +app_update 2394010 validate +quit' > /tmp/palworld-update.log 2>&1 &"
-                run_command(cmd)
+                update_command = (
+                    f'cd {shlex.quote(STEAM_HOME + "/steamcmd")} && '
+                    f'./steamcmd.sh +force_install_dir {shlex.quote(PALWORLD_DIR)} '
+                    '+login anonymous +app_update 2394010 validate +quit '
+                    '> /tmp/palworld-update.log 2>&1 &'
+                )
+                run_as_steam(update_command)
                 self.send_json({'success': True, 'message': 'Update started in background (check /tmp/palworld-update.log)'})
 
             else:
