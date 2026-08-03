@@ -45,6 +45,26 @@ class ModManagerTests(unittest.TestCase):
             files = mod_manager.extract_archive_safely(archive, root / "out")
             self.assertEqual(files[0].read_text(), "ok")
 
+    def test_apply_action_updates_only_temporary_manifest_and_canonicalizes_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "manifest.json"
+            result = mod_manager.apply_action(
+                "dungeon-boss-respawn-map-timer-duplicate", "enable", manifest
+            )
+            self.assertTrue(result["applied"])
+            self.assertEqual(result["id"], "dungeon-boss-respawn-map-timer")
+            record = mod_manager.read_manifest(manifest)["mods"][result["id"]]
+            self.assertTrue(record["enabled"])
+            self.assertEqual(record["catalog_version"], None)
+
+            with self.assertRaises(mod_manager.ModManagerError):
+                mod_manager.apply_action("palpriority", "remove", manifest)
+
+    def test_apply_action_without_manifest_is_explicitly_non_mutating(self):
+        result = mod_manager.apply_action("palpriority", "disable")
+        self.assertFalse(result["applied"])
+        self.assertIn("not changed", result["message"])
+
     def test_lock_and_backup_rollback(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -61,6 +81,7 @@ class ModManagerTests(unittest.TestCase):
                     with mod_manager.operation_lock(lock):
                         pass
 
+<<<<<<< HEAD
     def test_staging_limits_hash_and_package_inspection(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -121,6 +142,23 @@ class ModManagerTests(unittest.TestCase):
     def test_client_instruction_generation_does_not_execute(self):
         plan = {"files": [{"path": "Mods/ui.pak", "destination": "/client/Mods/ui.pak"}]}
         self.assertIn("Copy Mods/ui.pak", mod_manager.client_instructions(plan))
+=======
+    def test_rollback_missing_backup_does_not_remove_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "server"
+            target.mkdir()
+            (target / "important.txt").write_text("keep")
+            with self.assertRaises(FileNotFoundError):
+                mod_manager.rollback_backup(root / "missing", target)
+            self.assertEqual((target / "important.txt").read_text(), "keep")
+
+    def test_archive_validation_rejects_absolute_windows_and_backslash_paths(self):
+        for name in ("/absolute.txt", "C:/absolute.txt", "~user/file.txt", "folder\\file.txt"):
+            with self.subTest(name=name):
+                with self.assertRaises(mod_manager.UnsafeArchivePath):
+                    mod_manager.validate_archive_member(name)
+>>>>>>> c850cfe
 
 
 if __name__ == "__main__":
