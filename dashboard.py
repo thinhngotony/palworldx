@@ -1321,7 +1321,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             mod_id = urllib.parse.unquote(parts[3])
             action = urllib.parse.unquote(parts[4])
             try:
-                result = _mod_manager_call(('apply_action', 'mod_action', action), mod_id)
+                if mod_manager is None:
+                    result = None
+                elif callable(getattr(mod_manager, 'apply_action', None)):
+                    result = mod_manager.apply_action(mod_id, action, f"{PALWORLD_DIR}/.palworld-mods/manifest.json")
+                elif callable(getattr(mod_manager, 'mod_action', None)):
+                    result = mod_manager.mod_action(mod_id, action)
+                else:
+                    result = _mod_manager_call((action,), mod_id)
                 if result is None:
                     self.send_json({'success': False, 'message': 'mod_manager does not support this action'}, 501)
                 else:

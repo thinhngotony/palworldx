@@ -78,6 +78,20 @@ def get_mods(catalog: Mapping[str, Mapping[str, Any]] | None = None) -> list[dic
     return list_mods(catalog)
 
 
+def apply_action(mod_id: str, action: str, manifest_path: os.PathLike[str] | str | None = None) -> dict[str, Any]:
+    """Update catalog-backed state only; file installation remains an explicit future operation."""
+    if action not in {"enable", "disable"}:
+        raise ModManagerError(f"unsupported mod action: {action}")
+    catalog = load_catalog()
+    canonical = canonical_mod_id(mod_id, catalog)
+    mod = get_mod(canonical, catalog)
+    if manifest_path is None:
+        return {"id": canonical, "action": action, "metadata": mod, "applied": False,
+                "message": "No runtime manifest supplied; catalog state was not changed."}
+    record = set_mod_enabled(manifest_path, canonical, action == "enable", catalog_version=mod.get("version"))
+    return {"id": canonical, "action": action, "record": record, "applied": True}
+
+
 def validate_archive_member(name: str) -> str:
     """Return a normalized archive member or reject traversal/absolute paths."""
     if not isinstance(name, str) or not name or "\\" in name:
