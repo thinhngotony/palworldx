@@ -229,3 +229,219 @@ def rollback_backup(backup: os.PathLike[str] | str, target: os.PathLike[str] | s
     if target.exists():
         shutil.rmtree(target) if target.is_dir() else target.unlink()
     os.replace(temporary, target)
+
+
+# Upload/deployment primitives.  These functions intentionally accept local paths:
+# acquiring a download is outside this module's trust boundary.
+DEFAULT_MAX_UPLOAD_BYTES = 512 * 1024 * 1024
+DEFAULT_MAX_FILES = 2048
+
+
+def _under(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _controlled_root(root: os.PathLike[str] | str) -> Path:
+    requested = Path(root).expanduser()
+    if requested.exists() and requested.is_symlink():
+        raise ModManagerError("staging root must not be a symlink")
+    requested.mkdir(parents=True, exist_ok=True)
+    value = requested.resolve()
+    if value.is_symlink():
+        raise ModManagerError("staging root must not be a symlink")
+    return value
+
+
+def sha256_file(path: os.PathLike[str] | str, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _archive_limits(infos: list[zipfile.ZipInfo], max_files: int, max_bytes: int) -> None:
+    if len(infos) > max_files:
+        raise ModManagerError("archive file-count limit exceeded")
+    total = 0
+    for info in infos:
+        if info.file_size < 0 or info.file_size > max_bytes - total:
+            raise ModManagerError("archive size limit exceeded")
+        total += info.file_size
+        # Unix mode 0120000 is a symlink.  ZIP extraction must never materialize it.
+        if ((info.external_attr >> 16) & 0o170000) == 0o120000:
+            raise UnsafeArchivePath(info.filename)
+
+
+def stage_upload(archive: os.PathLike[str] | str, staging_root: os.PathLike[str] | str,
+                 *, max_bytes: int = DEFAULT_MAX_UPLOAD_BYTES,
+                 max_files: int = DEFAULT_MAX_FILES) -> dict[str, Any]:
+    """Validate and extract a ZIP into a private, controlled staging directory."""
+    root = _controlled_root(staging_root)
+    source = Path(archive).expanduser().resolve()
+    if not source.is_file() or source.is_symlink():
+        raise ModManagerError("upload must be a regular local file")
+    if source.stat().st_size > max_bytes:
+        raise ModManagerError("upload size limit exceeded")
+    with zipfile.ZipFile(source) as bundle:
+        infos = bundle.infolist()
+        _archive_limits(infos, max_files, max_bytes)
+        names = [validate_archive_member(info.filename) for info in infos]
+        if len(set(names)) != len(names):
+            raise UnsafeArchivePath("duplicate archive member")
+        directory = Path(tempfile.mkdtemp(prefix="upload-", dir=root))
+        try:
+            files = extract_archive_safely(source, directory)
+            # ZIPs can contain a directory and file with the same normalized name.
+            if len({p.relative_to(directory).as_posix() for p in files}) != len(files):
+                raise UnsafeArchivePath("duplicate archive member")
+        except Exception:
+            shutil.rmtree(directory, ignore_errors=True)
+            raise
+    return {"staging_dir": directory, "archive": source, "sha256": sha256_file(source),
+            "file_count": len(files), "bytes": sum(p.stat().st_size for p in files),
+            "files": [p.relative_to(directory).as_posix() for p in files]}
+
+
+def inspect_packages(staging_dir: os.PathLike[str] | str) -> dict[str, Any]:
+    """Identify supported PAK and UE4SS payloads without executing anything."""
+    root = Path(staging_dir).resolve()
+    if not root.is_dir() or root.is_symlink():
+        raise ModManagerError("invalid staging directory")
+    files = [p for p in root.rglob("*") if p.is_file() and not p.is_symlink()]
+    pak = [p.relative_to(root).as_posix() for p in files if p.suffix.lower() == ".pak"]
+    ue4ss = [p.relative_to(root).as_posix() for p in files
+             if p.suffix.lower() in {".dll", ".ini", ".uplugin"} or "ue4ss" in p.parts]
+    unsupported = [p.relative_to(root).as_posix() for p in files
+                   if p.relative_to(root).as_posix() not in set(pak + ue4ss)]
+    return {"pak": sorted(set(pak)), "ue4ss": sorted(set(ue4ss)),
+            "unsupported": sorted(unsupported), "supported": bool(pak or ue4ss)}
+
+
+def _gate(mod_id: str, package: Mapping[str, Any], catalog: Mapping[str, Mapping[str, Any]], target: str) -> dict[str, Any]:
+    try:
+        mod = get_mod(mod_id, catalog)
+    except KeyError as exc:
+        raise ModManagerError("unknown mods are blocked by default") from exc
+    if target == "server" and not mod.get("server_install_allowed", False):
+        raise ModManagerError(f"server installation is not approved for {mod_id}")
+    scope = mod.get("scope", "unknown")
+    if scope not in {target, "both"}:
+        raise ModManagerError(f"mod is not compatible with {target}")
+    if not package.get("supported") or package.get("unsupported"):
+        raise ModManagerError("package contains unsupported or unrecognized files")
+    return mod
+
+
+def preview_plan(staging_dir: os.PathLike[str] | str, target_root: os.PathLike[str] | str,
+                 mod_id: str, *, target: str = "server",
+                 catalog: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
+    """Return a deterministic plan; this performs no writes and rejects unsafe targets."""
+    if target not in {"server", "client"}:
+        raise ModManagerError("target must be server or client")
+    root = Path(target_root).expanduser().resolve()
+    package = inspect_packages(staging_dir)
+    mod = _gate(mod_id, package, catalog or load_catalog(), target)
+    files = sorted(p for p in Path(staging_dir).resolve().rglob("*") if p.is_file() and not p.is_symlink())
+    entries = []
+    for source in files:
+        relative = source.relative_to(Path(staging_dir).resolve()).as_posix()
+        destination = (root / relative).resolve()
+        if not _under(destination, root):
+            raise UnsafeArchivePath(relative)
+        entries.append({"path": relative, "sha256": sha256_file(source),
+                        "destination": str(destination), "owned": True})
+    return {"mod_id": canonical_mod_id(mod["id"], catalog or load_catalog()), "target": target,
+            "files": entries, "package": package}
+
+
+def apply_plan(plan: Mapping[str, Any], staging_dir: os.PathLike[str] | str,
+               manifest_path: os.PathLike[str] | str) -> dict[str, Any]:
+    """Apply one plan, replacing only its owned paths and recording hashes."""
+    if not plan.get("files"):
+        raise ModManagerError("deployment plan has no files")
+    root = Path(plan["files"][0]["destination"]).resolve().parent
+    for item in plan["files"][1:]:
+        destination = Path(item["destination"]).resolve().parent
+        root = Path(os.path.commonpath((str(root), str(destination))))
+    root.mkdir(parents=True, exist_ok=True)
+    manifest = read_manifest(manifest_path)
+    mod_id = str(plan["mod_id"])
+    old = manifest["mods"].get(mod_id, {})
+    owned = set(old.get("owned_files", []))
+    for item in plan["files"]:
+        destination = Path(item["destination"])
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        source = Path(staging_dir).resolve() / item["path"]
+        shutil.copy2(source, destination)
+        owned.add(str(destination))
+    record = {"enabled": True, "owned_files": sorted(owned),
+              "files": {item["path"]: item["sha256"] for item in plan["files"]},
+              "target": plan["target"]}
+    manifest["mods"][mod_id] = record
+    write_manifest(manifest_path, manifest)
+    return record
+
+
+def batch_apply(operations: list[Mapping[str, Any]], manifest_path: os.PathLike[str] | str,
+                backup_root: os.PathLike[str] | str) -> list[dict[str, Any]]:
+    """Apply operations atomically from the caller's perspective, restoring on failure."""
+    manifest = Path(manifest_path)
+    snapshot = create_backup(manifest, backup_root, "manifest") if manifest.exists() else None
+    targets = {Path(item["destination"]).resolve().parent for op in operations for item in op["plan"]["files"]}
+    backups = [(target, create_backup(target, backup_root, "target")) for target in targets if target.exists()]
+    try:
+        return [apply_plan(op["plan"], op["staging_dir"], manifest) for op in operations]
+    except Exception:
+        if snapshot:
+            rollback_backup(snapshot, manifest)
+        for target, backup in backups:
+            rollback_backup(backup, target)
+        raise
+
+
+def set_mod_state(manifest_path: os.PathLike[str] | str, mod_id: str, action: str) -> dict[str, Any]:
+    """Enable/disable/remove only files owned by this mod's manifest record."""
+    if action not in {"enable", "disable", "remove"}:
+        raise ModManagerError(f"unsupported mod action: {action}")
+    manifest = read_manifest(manifest_path)
+    record = manifest["mods"].get(mod_id)
+    if record is None:
+        raise KeyError(mod_id)
+    if action in {"disable", "remove"}:
+        for raw in record.get("owned_files", []):
+            path = Path(raw)
+            if path.is_file() and not path.is_symlink():
+                path.unlink()
+        # Remove now-empty directories only; never remove a directory containing
+        # unowned content.
+        for raw in sorted(record.get("owned_files", []), key=lambda value: len(Path(value).parts), reverse=True):
+            parent = Path(raw).parent
+            while parent != parent.parent:
+                try:
+                    parent.rmdir()
+                except OSError:
+                    break
+                parent = parent.parent
+    if action == "remove":
+        del manifest["mods"][mod_id]
+    else:
+        record["enabled"] = action == "enable"
+    write_manifest(manifest_path, manifest)
+    return record if action != "remove" else {"id": mod_id, "removed": True}
+
+
+def client_instructions(plan: Mapping[str, Any]) -> str:
+    """Generate inert, human-readable instructions rather than executing client work."""
+    return "Install the approved client package manually.\n" + "\n".join(
+        f"- Copy {item['path']} to {item['destination']}" for item in plan.get("files", []))
+
+# Explicit aliases make the backend contract discoverable to callers.
+stage_archive = stage_upload
+inspect_package = inspect_packages
+plan_deployment = preview_plan
+apply_batch = batch_apply

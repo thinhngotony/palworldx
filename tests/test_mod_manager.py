@@ -61,6 +61,67 @@ class ModManagerTests(unittest.TestCase):
                     with mod_manager.operation_lock(lock):
                         pass
 
+    def test_staging_limits_hash_and_package_inspection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / "mod.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("Mods/example.pak", b"pak")
+                bundle.writestr("ue4ss/mod.dll", b"dll")
+            staged = mod_manager.stage_upload(archive, root / "staging", max_bytes=1000, max_files=3)
+            self.assertEqual(staged["sha256"], mod_manager.sha256_file(archive))
+            self.assertEqual(mod_manager.inspect_packages(staged["staging_dir"])["pak"], ["Mods/example.pak"])
+            self.assertIn("ue4ss/mod.dll", mod_manager.inspect_packages(staged["staging_dir"])["ue4ss"])
+
+    def test_archive_rejects_backslash_absolute_duplicate_and_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = [("backslash.zip", [("..\\escape", b"x")]),
+                     ("absolute.zip", [("/escape", b"x")]),
+                     ("duplicate.zip", [("a.pak", b"x"), ("a.pak", b"y")])]
+            for filename, members in cases:
+                archive = root / filename
+                with zipfile.ZipFile(archive, "w") as bundle:
+                    for name, content in members:
+                        bundle.writestr(name, content)
+                with self.assertRaises(mod_manager.UnsafeArchivePath):
+                    mod_manager.stage_upload(archive, root / "staging")
+            archive = root / "symlink.zip"
+            info = zipfile.ZipInfo("link.pak")
+            info.create_system = 3
+            info.external_attr = (0o120777 << 16)
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr(info, "target")
+            with self.assertRaises(mod_manager.UnsafeArchivePath):
+                mod_manager.stage_upload(archive, root / "staging")
+
+    def test_preview_gate_apply_and_owned_file_lifecycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / "approved.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("Mods/example.pak", b"pak")
+            catalog = {"approved": {"id": "approved", "scope": "server",
+                                     "server_install_allowed": True}}
+            staged = mod_manager.stage_upload(archive, root / "staging")
+            plan = mod_manager.preview_plan(staged["staging_dir"], root / "server", "approved", catalog=catalog)
+            manifest = root / "manifest.json"
+            record = mod_manager.apply_plan(plan, staged["staging_dir"], manifest)
+            owned = root / "server" / "Mods/example.pak"
+            self.assertTrue(owned.exists())
+            self.assertIn(str(owned), record["owned_files"])
+            unrelated = root / "server" / "keep.txt"
+            unrelated.write_text("keep")
+            mod_manager.set_mod_state(manifest, "approved", "disable")
+            self.assertFalse(owned.exists())
+            self.assertTrue(unrelated.exists())
+            with self.assertRaises(mod_manager.ModManagerError):
+                mod_manager.preview_plan(staged["staging_dir"], root / "server", "unknown")
+
+    def test_client_instruction_generation_does_not_execute(self):
+        plan = {"files": [{"path": "Mods/ui.pak", "destination": "/client/Mods/ui.pak"}]}
+        self.assertIn("Copy Mods/ui.pak", mod_manager.client_instructions(plan))
+
 
 if __name__ == "__main__":
     unittest.main()
