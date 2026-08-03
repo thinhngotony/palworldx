@@ -355,12 +355,24 @@ sudo userdel -r steam
 - **Palworld Discord**: https://discord.gg/palworld
 - **Steam Community**: https://steamcommunity.com/app/1623730
 
-## Dashboard Mods page (planned)
+## Mods: upload, inspect, preview, apply
 
-When the `mod_manager` module is present, the web dashboard exposes a Mods page at `/mods`.
-It is read-only by default and requires explicit maintenance confirmation before any mutating action.
-The page will display the installed-mod manifest, compatibility badges, client installation instructions, and canonical links for duplicate Workshop/Nexus references.
-Unverified Nexus mods (550, 3915, 214, 190) are blocked from automatic installation.
+The dashboard Mods page (`/mods`) is a catalog and inventory surface, not a mod downloader. Use [`mods/catalog.json`](mods/catalog.json) as the authoritative metadata source. A source URL does not establish that a release is authentic, compatible, safe, or suitable for a dedicated server.
+
+Use this production-safe workflow for an operator-provided archive:
+
+1. **Upload to staging**, never directly into `/home/steam/palworld-server`. Keep the archive in a separate staging directory and record its catalog ID, exact source URL, release/file version, SHA-256, and operator.
+2. **Inspect online** before downtime. List the archive, inspect its manifest/readme and paths, identify PAK/UE4SS or other loader requirements, check dependencies and game/server version, and separate client-only files from server files. Reject unknown, tampered, or mismatched archives.
+3. **Preview** the proposed additions, replacements, deletions, conflicts, dependency failures, backup, and rollback plan. Preview must be read-only and must not stop the server or alter the live tree.
+4. **Apply** only after a current save/config/mod backup and explicit maintenance approval immediately before the mutation. Stop the server cleanly, apply only the inspected files, record hashes and the resulting manifest, restart, and verify status/logs. If any step fails, stop and use the approved rollback plan; never continue silently.
+
+### Production downtime and unsupported-mod rules
+
+Uploads, inspection, dependency checks, and previews may be performed while the server remains online. Any server-side add, replacement, removal, or rollback is a maintenance operation and must use an announced window, player drain, clean stop, lifecycle lock, backup, and explicit confirmation. Do not rely on claims of hot reload, and do not force-kill a live server to install a mod.
+
+Client-only mods are installed by each player on their own client and are never copied into the server directory. Mods classified as `unknown`, `unverified`, or unsupported remain blocked: they may be researched manually, but must not be automatically downloaded, preview-applied, or installed on production. Nexus references 550, 3915, 214, and 190 are explicitly unverified. Catalog references #4 and #7 resolve to the single canonical `dungeon-boss-respawn-map-timer` entry; the alias is not independently installable.
+
+The catalog defaults every server install to `blocked-unless-explicitly-approved`, and every entry has an explicit server-install gate. `scope: both` is not proof of a safe server package; it still requires archive inspection, matching versions, dependencies, backup, preview, and maintenance approval.
 
 ## FAQ
 

@@ -292,29 +292,31 @@ Lifecycle operations (stop, restart, update) always require explicit confirmatio
 
 ## Mods Integration
 
-The dashboard exposes a Mods page (`/mods`) when the optional `mod_manager` module is present.
-The Mods page is **read-only by default** and requires explicit maintenance confirmation before any mutating action.
+The dashboard Mods page (`/mods`) is a catalog and inventory surface, not a mod downloader. The authoritative metadata is [`mods/catalog.json`](mods/catalog.json); its URLs, scope, dependencies, installation method, verification state, client instructions, and server-install gate must be reviewed before any action. An unknown or unverified entry is not verified and is never permission to install.
 
-### Planned behavior
-- Inventory installed mods from a versioned JSON manifest (`/home/steam/palworld-server/.palworld-mods/manifest.json`).
-- Show compatibility badges (client / server / both / unknown).
-- Display client installation instructions where appropriate.
-- Never apply server-side mod changes automatically; always route through a confirmed maintenance window.
-- Link duplicate Workshop/Nexus references to a single canonical mod entry.
+### Upload, inspect, preview, apply
 
-### Client vs. server installation
-| Mod | Scope | How to install |
-|-----|-------|----------------|
-| AutomaticallySkipModCaution | Client only | Client-side manual install |
-| Smaller Plantations | Unknown | Manual review; multiplayer support unresolved |
-| Currencies, Keys and More are Key Items | Unknown | Blocked on dedicated server by default |
-| Dungeon Boss Respawn Map Timer | Client only | Client-side manual install |
-| Less Restrictive Building | Both | Requires explicit PAK or UE4SS selection |
-| PalPriority | Both | Server core + optional client UI components |
-| Building Enhanced / Free Camera | Client only | Client-side manual install |
-| Nexus 550, 3915, 214, 190 | Unknown / unverified | Automatic installation blocked; manual review required |
+Use this workflow for a mod archive supplied by an operator. It stages and inspects the upload before touching the live server:
 
-Nexus entries 550, 3915, 214, and 190 have not been independently verified. Treat them as unverified until proven otherwise.
+1. **Upload** the original archive to a staging location outside the live server tree (for example `/home/steam/palworld-staging/incoming/`). Record the catalog ID, source URL, release/file version, SHA-256, and operator.
+2. **Inspect** the archive without extracting over production. Confirm the expected file layout, loader/runtime, dependencies, game/server version, permissions, and whether it contains client-only files. Reject archives that are unidentified, altered, or inconsistent with the catalog.
+3. **Preview** the proposed file operations and conflicts against the server tree. A preview must list additions, replacements, deletions, dependency failures, and the backup/rollback plan. Preview is read-only and must not stop the server.
+4. **Apply** only after a tested backup and an explicit maintenance approval immediately before the change. Apply the minimum validated files, record the resulting hash/manifest, and verify startup and logs. Client-only files never belong in the server upload.
+
+Do not confuse an upload with an install: staging, inspection, and preview may happen online; applying server files is a production mutation.
+
+### Production downtime rules
+
+- Treat every server-side mod apply, replacement, removal, or rollback as downtime-risking, even when a package claims hot reload.
+- Announce the maintenance window, stop admitting players, take a save/config/mod backup, and use the lifecycle lock. Stop the server cleanly before changing loaded files; never force-kill it to make an install proceed.
+- If stop, backup, validation, apply, or restart fails, stop the procedure and restore/rollback only through the same confirmed maintenance window. Never silently continue.
+- Keep the server online for upload, inspection, dependency checks, and preview. A client-only mod requires no server downtime, but each player installs it locally and the catalog gate still applies.
+
+### Catalog policy
+
+The catalog defaults every server install to **blocked unless explicitly approved**. Client/both/unknown scope is classification, not a safety claim. Unknown or unsupported mods—including Nexus references 550, 3915, 214, and 190—must remain unverified, require manual review, and cannot be automatically downloaded, preview-applied, or installed on the dedicated server. Duplicate references #4 and #7 resolve to the single canonical `dungeon-boss-respawn-map-timer` entry.
+
+See `mods/catalog.json` for the per-mod client instructions and explicit server-install gate.
 
 ## 🔧 Advanced Usage
 

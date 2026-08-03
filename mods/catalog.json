@@ -1,115 +1,160 @@
 {
-  "schema_version": 1,
-  "description": "Curated initial metadata only; no entries imply that a download or server installation is safe.",
+  "schema_version": 2,
+  "description": "Catalog metadata is advisory. A source URL is not proof that a mod is compatible, safe, or permitted on a dedicated server.",
+  "default_server_install_policy": "blocked-unless-explicitly-approved",
+  "verification_states": ["verified", "partially-verified", "unverified", "unknown", "not-applicable"],
   "mods": [
     {
       "id": "automatically-skip-mod-caution",
       "name": "AutomaticallySkipModCaution",
+      "source_urls": [],
       "scope": "client",
-      "uncertainty": "likely",
+      "dependencies": ["Palworld client mod loader, if required by the release"],
       "install_method": "client-manual",
+      "verification_state": "unverified",
       "server_install_allowed": false,
-      "notes": "Likely client-only; do not install on a dedicated server automatically."
+      "server_install_gate": "blocked: client-only classification; do not upload or apply to a dedicated server",
+      "client_instructions": "Download only from the author's original listing, inspect the archive, and follow that release's client mod-loader and game-version instructions. Do not distribute it through the server.",
+      "notes": "Catalog identity is retained, but no source release has been independently verified here."
     },
     {
       "id": "smaller-plantations",
       "name": "Smaller Plantations",
+      "source_urls": [],
       "scope": "unknown",
-      "uncertainty": "high",
+      "dependencies": [],
       "install_method": "manual-review",
+      "verification_state": "unknown",
       "server_install_allowed": false,
-      "notes": "Multiplayer support is unclear; manual review required."
+      "server_install_gate": "blocked: multiplayer and dedicated-server support unresolved; written compatibility approval is required before any server change",
+      "client_instructions": "Treat as unsupported until the original release, requirements, game version, and multiplayer behavior are inspected. If a client release is confirmed, each player installs it locally according to its author instructions.",
+      "notes": "Do not infer compatibility from the title or from a third-party repost."
     },
     {
       "id": "currencies-keys-more-key-items",
       "name": "Currencies, Keys and More are Key Items",
+      "source_urls": [],
       "scope": "unknown",
-      "uncertainty": "high",
+      "dependencies": [],
       "install_method": "manual-review",
+      "verification_state": "unknown",
       "server_install_allowed": false,
-      "notes": "Dedicated-server support is unresolved; blocked by default."
+      "server_install_gate": "blocked: dedicated-server support unresolved; no server upload, preview apply, or production install",
+      "client_instructions": "Use only an independently inspected client release with a matching game version. Every player must install the same required client components; otherwise leave it unsupported.",
+      "notes": "Unknown is not a verification result and is not permission to install."
     },
     {
       "id": "dungeon-boss-respawn-map-timer",
       "name": "Dungeon Boss Respawn Map Timer",
+      "source_urls": [],
       "scope": "client",
-      "uncertainty": "medium",
+      "dependencies": ["Palworld client mod loader, if required by the release"],
       "install_method": "client-manual",
+      "verification_state": "unverified",
       "server_install_allowed": false,
-      "notes": "Client instructions only."
+      "server_install_gate": "blocked: client-only classification; server-side application is not supported",
+      "client_instructions": "Inspect the original release and install its client files locally exactly as documented, including any loader, dependency, and game-version requirements. Do not copy client files into the dedicated-server directory.",
+      "notes": "Reference #4 is canonical; reference #7 maps to this entry."
     },
     {
       "id": "less-restrictive-building",
       "name": "Less Restrictive Building",
+      "source_urls": [],
       "scope": "both",
-      "uncertainty": "medium",
+      "dependencies": ["The loader/runtime named by the selected release (PAK or UE4SS); exact dependency must be confirmed from the archive"],
       "install_method": "pak-or-ue4ss",
+      "verification_state": "unverified",
       "server_install_allowed": false,
-      "notes": "Package-dependent; require explicit PAK/UE4SS selection."
+      "server_install_gate": "blocked: package and loader are not verified; server install requires inspected archive, matching server version, backup, preview, and explicit maintenance approval",
+      "client_instructions": "Choose the release's documented PAK or UE4SS variant, not both by assumption. Inspect contents and dependencies first; install the matching client component on every player who needs it.",
+      "notes": "Both scope does not mean this catalog has verified a safe dedicated-server package."
     },
     {
       "id": "palpriority",
       "name": "PalPriority",
+      "source_urls": [],
       "scope": "both",
-      "uncertainty": "medium",
+      "dependencies": ["The server core/client UI dependencies specified by the selected release"],
       "install_method": "split-core-and-client-ui",
+      "verification_state": "unverified",
       "server_install_allowed": false,
-      "notes": "Server core plus optional client UI; package boundaries require review."
+      "server_install_gate": "blocked: core/UI package boundaries and compatibility are unverified; server install requires separate inspected components and explicit maintenance approval",
+      "client_instructions": "Separate the server core from optional client UI files using the author's release instructions. Every client must install only the matching UI component and dependencies.",
+      "notes": "Do not install the client UI on the server or treat a combined archive as server-safe without inspection."
     },
     {
       "id": "building-enhanced-free-camera",
       "name": "Building Enhanced / Free Camera",
+      "source_urls": [],
       "scope": "client",
-      "uncertainty": "medium",
+      "dependencies": ["Palworld client mod loader, if required by the release"],
       "install_method": "client-manual",
+      "verification_state": "unverified",
       "server_install_allowed": false,
-      "notes": "Client-only; client instructions only."
+      "server_install_gate": "blocked: client-only classification; do not install on a dedicated server",
+      "client_instructions": "Inspect the original release, install locally with its stated loader and game-version requirements, and keep its files out of the server upload."
     },
     {
       "id": "nexus-550",
       "name": "Nexus reference 550",
+      "source_urls": ["https://www.nexusmods.com/palworld/mods/550"],
       "scope": "unknown",
-      "uncertainty": "unverified",
+      "dependencies": [],
       "install_method": "manual-review",
+      "verification_state": "unverified",
       "server_install_allowed": false,
-      "notes": "Unresolved reference; automatic installation blocked."
+      "server_install_gate": "blocked: URL identity, files, scope, dependencies, and dedicated-server compatibility must be independently verified before consideration",
+      "client_instructions": "Open the source listing and inspect the exact file, requirements, permissions, and game version. Until that review is recorded, do not install on clients or servers."
     },
     {
       "id": "nexus-3915",
       "name": "Nexus reference 3915",
+      "source_urls": ["https://www.nexusmods.com/palworld/mods/3915"],
       "scope": "unknown",
-      "uncertainty": "unverified",
+      "dependencies": [],
       "install_method": "manual-review",
+      "verification_state": "unverified",
       "server_install_allowed": false,
-      "notes": "Unresolved reference; automatic installation blocked."
+      "server_install_gate": "blocked: URL identity, files, scope, dependencies, and dedicated-server compatibility must be independently verified before consideration",
+      "client_instructions": "Open the source listing and inspect the exact file, requirements, permissions, and game version. Until that review is recorded, do not install on clients or servers."
     },
     {
       "id": "nexus-214",
       "name": "Nexus reference 214",
+      "source_urls": ["https://www.nexusmods.com/palworld/mods/214"],
       "scope": "unknown",
-      "uncertainty": "unverified",
+      "dependencies": [],
       "install_method": "manual-review",
+      "verification_state": "unverified",
       "server_install_allowed": false,
-      "notes": "Unresolved reference; automatic installation blocked."
+      "server_install_gate": "blocked: URL identity, files, scope, dependencies, and dedicated-server compatibility must be independently verified before consideration",
+      "client_instructions": "Open the source listing and inspect the exact file, requirements, permissions, and game version. Until that review is recorded, do not install on clients or servers."
     },
     {
       "id": "nexus-190",
       "name": "Nexus reference 190",
+      "source_urls": ["https://www.nexusmods.com/palworld/mods/190"],
       "scope": "unknown",
-      "uncertainty": "unverified",
+      "dependencies": [],
       "install_method": "manual-review",
+      "verification_state": "unverified",
       "server_install_allowed": false,
-      "notes": "Unresolved reference; automatic installation blocked."
+      "server_install_gate": "blocked: URL identity, files, scope, dependencies, and dedicated-server compatibility must be independently verified before consideration",
+      "client_instructions": "Open the source listing and inspect the exact file, requirements, permissions, and game version. Until that review is recorded, do not install on clients or servers."
     },
     {
       "id": "dungeon-boss-respawn-map-timer-duplicate",
       "name": "Dungeon Boss Respawn Map Timer (duplicate reference)",
       "canonical_id": "dungeon-boss-respawn-map-timer",
+      "source_urls": [],
       "scope": "client",
-      "uncertainty": "medium",
+      "dependencies": [],
       "install_method": "alias",
+      "verification_state": "not-applicable",
       "server_install_allowed": false,
-      "notes": "Duplicate reference canonicalized to the entry for #4."
+      "server_install_gate": "blocked: aliases cannot be installed",
+      "client_instructions": "Use the canonical entry and its instructions.",
+      "notes": "Duplicate reference canonicalized to #4; never download or apply the alias independently."
     }
   ],
   "duplicate_references": {
