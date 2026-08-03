@@ -71,7 +71,15 @@ sudo su - steam
 ./status-palworld.sh
 ```
 
-### Updating the Server
+### Production-safe Stop / Restart / Update
+
+All lifecycle operations require explicit confirmation when the server is running.
+
+- Interactive mode: type `yes` to confirm, anything else cancels.
+- Non-interactive mode (scripts, cron, CI): supply `--yes` only after you independently verified interruption is safe.
+- A lifecycle lock (`/home/steam/.palworld-lifecycle.lock`) prevents concurrent mutations.
+
+## Updating the Server
 ```bash
 sudo su - steam
 ./update-palworld.sh
@@ -347,6 +355,13 @@ sudo userdel -r steam
 - **Palworld Discord**: https://discord.gg/palworld
 - **Steam Community**: https://steamcommunity.com/app/1623730
 
+## Dashboard Mods page (planned)
+
+When the `mod_manager` module is present, the web dashboard exposes a Mods page at `/mods`.
+It is read-only by default and requires explicit maintenance confirmation before any mutating action.
+The page will display the installed-mod manifest, compatibility badges, client installation instructions, and canonical links for duplicate Workshop/Nexus references.
+Unverified Nexus mods (550, 3915, 214, 190) are blocked from automatic installation.
+
 ## FAQ
 
 **Q: How much does it cost to run a Palworld server?**
@@ -363,6 +378,22 @@ A: No, the server can be installed and run anonymously.
 
 **Q: Can I mod the server?**
 A: Modding support depends on the game's current version. Check official documentation.
+
+**Q: Which mods are safe to install on the server?**
+A: The bundled curated catalog (`mods/catalog.json`) classifies each known mod. Server-side installation is blocked by default for every entry except those explicitly marked as safe. The following table summarizes the classification; see `mods/catalog.json` for the authoritative source.
+
+| Mod | Scope | Server install | Notes |
+|-----|-------|----------------|-------|
+| AutomaticallySkipModCaution | Client only | Blocked | Likely client-only |
+| Smaller Plantations | Unknown | Blocked | Multiplayer support unresolved |
+| Currencies, Keys and More are Key Items | Unknown | Blocked | Dedicated-server support unresolved |
+| Dungeon Boss Respawn Map Timer | Client only | Blocked | Client instructions only |
+| Less Restrictive Building | Both | Blocked | Requires explicit PAK/UE4SS selection |
+| PalPriority | Both | Blocked | Server core + optional client UI |
+| Building Enhanced / Free Camera | Client only | Blocked | Client instructions only |
+| Nexus 550, 3915, 214, 190 | Unknown / unverified | Blocked | Not independently verified |
+
+Nexus entries 550, 3915, 214, and 190 are unresolved references and must not be auto-installed. Duplicate Workshop/Nexus listings canonicalize to a single entry.
 
 ---
 

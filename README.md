@@ -240,6 +240,22 @@ Restart after changes:
 sudo bash palworld.sh restart
 ```
 
+## Production Safety
+
+Lifecycle operations (stop, restart, update) always require explicit confirmation when the server is running.
+
+**Interactive confirmations:**
+- Typing `yes` at the prompt permits the operation.
+- Any other input cancels it.
+- Non-interactive invocations (pipelines, cron) are refused unless `--yes` is supplied.
+
+**Automation:** Pass `--yes` only after you have independently verified the interruption is safe:
+```bash
+0 4 * * * /bin/bash /path/to/palworld.sh restart --yes
+```
+
+**Concurrency guard:** A file lock (`/home/steam/.palworld-lifecycle.lock`) prevents overlapping stop/restart/update operations. A second concurrent call will wait or fail instead of racing the server.
+
 ## 📊 System Requirements
 
 ### Minimum
@@ -256,16 +272,42 @@ sudo bash palworld.sh restart
 - **Storage:** 50 GB SSD
 - **Network:** 50 Mbps upload
 
+## Mods Integration
+
+The dashboard exposes a Mods page (`/mods`) when the optional `mod_manager` module is present.
+The Mods page is **read-only by default** and requires explicit maintenance confirmation before any mutating action.
+
+### Planned behavior
+- Inventory installed mods from a versioned JSON manifest (`/home/steam/palworld-server/.palworld-mods/manifest.json`).
+- Show compatibility badges (client / server / both / unknown).
+- Display client installation instructions where appropriate.
+- Never apply server-side mod changes automatically; always route through a confirmed maintenance window.
+- Link duplicate Workshop/Nexus references to a single canonical mod entry.
+
+### Client vs. server installation
+| Mod | Scope | How to install |
+|-----|-------|----------------|
+| AutomaticallySkipModCaution | Client only | Client-side manual install |
+| Smaller Plantations | Unknown | Manual review; multiplayer support unresolved |
+| Currencies, Keys and More are Key Items | Unknown | Blocked on dedicated server by default |
+| Dungeon Boss Respawn Map Timer | Client only | Client-side manual install |
+| Less Restrictive Building | Both | Requires explicit PAK or UE4SS selection |
+| PalPriority | Both | Server core + optional client UI components |
+| Building Enhanced / Free Camera | Client only | Client-side manual install |
+| Nexus 550, 3915, 214, 190 | Unknown / unverified | Automatic installation blocked; manual review required |
+
+Nexus entries 550, 3915, 214, and 190 have not been independently verified. Treat them as unverified until proven otherwise.
+
 ## 🔧 Advanced Usage
 
 ### Automation / Cron Jobs
 
 ```bash
-# Auto-restart at 4 AM daily
-0 4 * * * /bin/bash /path/to/palworld.sh restart
+# Auto-restart at 4 AM daily (requires --yes for non-interactive runs)
+0 4 * * * /bin/bash /path/to/palworld.sh restart --yes
 
-# Auto-update and restart weekly
-0 3 * * 0 /bin/bash /path/to/palworld.sh update && /bin/bash /path/to/palworld.sh start
+# Auto-update and restart weekly (requires --yes for non-interactive runs)
+0 3 * * 0 /bin/bash /path/to/palworld.sh update --yes && /bin/bash /path/to/palworld.sh start
 ```
 
 ### Systemd Service (Optional)
