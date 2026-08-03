@@ -13,6 +13,7 @@ import secrets
 import time
 import threading
 import urllib.parse
+import importlib
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from http.cookies import SimpleCookie
 from datetime import datetime
@@ -32,6 +33,15 @@ SESSION_TIMEOUT = 3600  # 1 hour
 
 # Command history for the terminal
 command_history = []
+
+# Optional mod manager integration. The dashboard remains usable when absent.
+try:
+    mod_manager = importlib.import_module('mod_manager')
+except ImportError:
+    mod_manager = None
+
+maintenance_confirmations = {}
+MAINTENANCE_CONFIRMATION_TIMEOUT = 300
 
 
 def generate_session_id():
@@ -222,6 +232,51 @@ def get_backup_list():
                     'size': os.path.getsize(path) if os.path.exists(path) else 0
                 })
     return backups
+
+
+def _mod_manager_call(names, *args, **kwargs):
+    """Call the first supported mod_manager API name, if available."""
+    if mod_manager is None:
+        return None
+    for name in names:
+        function = getattr(mod_manager, name, None)
+        if callable(function):
+            return function(*args, **kwargs)
+    return None
+
+
+def json_safe(value):
+    """Keep optional backend values safe and serializable for the API."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [json_safe(item) for item in value]
+    return str(value)
+
+
+def get_mods():
+    """Return JSON-safe mod data from the optional mod_manager module."""
+    result = _mod_manager_call(('list_mods', 'get_mods', 'list'))
+    if result is None:
+        return []
+    if isinstance(result, dict):
+        result = result.get('mods', result.get('items', []))
+    if not isinstance(result, (list, tuple)):
+        return []
+    return [json_safe(item if isinstance(item, dict) else {'id': str(item), 'name': str(item)}) for item in result]
+
+
+def get_mod(mod_id):
+    """Return one JSON-safe mod, or None when it is unavailable."""
+    result = _mod_manager_call(('get_mod', 'mod_details', 'get'), mod_id)
+    if result is not None:
+        return result if isinstance(result, dict) else {'id': mod_id, 'value': result}
+    for item in get_mods():
+        if str(item.get('id', '')) == mod_id:
+            return item
+    return None
 
 
 def get_network_info():
@@ -532,6 +587,9 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 <div class="nav-item" onclick="showPage('backups',this)">
 <span class="icon">&#128190;</span> Backups
 </div>
+<div class="nav-item" onclick="showPage('mods',this)">
+<span class="icon">&#128230;</span> Mods
+</div>
 </div>
 <div class="nav-section">
 <div class="nav-section-title">System</div>
@@ -730,6 +788,19 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 </div>
 </div>
 
+<!-- ═══ MODS PAGE ═══ -->
+<div class="page" id="page-mods">
+<div class="page-header">
+<div><div class="page-title">Mods</div><div class="page-subtitle">Authenticated mod manager integration</div></div>
+<div class="header-actions"><button class="btn-refresh" onclick="refreshMods()">&#x21bb; Refresh</button></div>
+</div>
+<div class="card">
+<div class="card-header"><span class="card-title">Installed Mods</span></div>
+<div id="modList"><p style="color:var(--text-muted);font-size:13px">Loading...</p></div>
+<p style="color:var(--text-muted);font-size:12px;margin-top:16px">Mod changes require explicit maintenance confirmation and are never applied automatically.</p>
+</div>
+</div>
+
 <!-- ═══ SYSTEM PAGE ═══ -->
 <div class="page" id="page-system">
 <div class="page-header">
@@ -781,6 +852,7 @@ function showPage(id, el) {
   if(id==='logs') refreshLogs();
   if(id==='config') refreshConfig();
   if(id==='backups') refreshBackups();
+  if(id==='mods') refreshMods();
   if(id==='network') refreshNetwork();
   if(id==='system') refreshAll();
   // Close mobile sidebar
@@ -903,6 +975,14 @@ function serverAction(action) {
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:action})
   }).then(data => {
+    if(data.requires_confirmation && data.confirmation_token && confirm(data.message+' Continue?')) {
+      return api('/api/control', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:action, maintenance_confirmation:data.confirmation_token})
+      });
+    }
+    return data;
+  }).then(data => {
     actionInProgress = false;
     if(data.success) {
       toast(data.message, 'success');
@@ -985,6 +1065,22 @@ function refreshBackups() {
   });
 }
 
+// ─── Mods ───
+function refreshMods() {
+  api('/api/mods').then(data => {
+    const el = document.getElementById('modList');
+    const mods = data.mods || [];
+    if(!mods.length) { el.textContent = data.available === false ? 'mod_manager is not available.' : 'No mods found.'; return; }
+    el.innerHTML = '';
+    mods.forEach(mod => {
+      const row = document.createElement('div'); row.className = 'info-row';
+      const label = document.createElement('span'); label.className = 'info-label'; label.textContent = mod.name || mod.id || 'Unnamed mod';
+      const value = document.createElement('span'); value.className = 'info-value'; value.textContent = mod.version || mod.status || mod.id || '--';
+      row.appendChild(label); row.appendChild(value); el.appendChild(row);
+    });
+  }).catch(e => console.error('Mods fetch error:', e));
+}
+
 // ─── Refresh all ───
 function refreshAll() { refreshStats(); }
 
@@ -1005,9 +1101,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def send_json(self, data, status=200):
         self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Cache-Control', 'no-store')
         self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        self.wfile.write(json.dumps(json_safe(data), ensure_ascii=False).encode('utf-8'))
+
+    def send_not_found(self):
+        self.send_json({'error': 'Not found'}, 404)
 
     def send_html(self, html, status=200):
         self.send_response(status)
@@ -1018,6 +1118,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def is_authenticated(self):
         cookie_header = self.headers.get('Cookie', '')
         return validate_session(cookie_header)
+
+    def read_json(self, body):
+        try:
+            data = json.loads(body)
+        except (json.JSONDecodeError, TypeError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def maintenance_confirmed(self, data):
+        token = data.get('maintenance_confirmation', '') if isinstance(data, dict) else ''
+        if not isinstance(token, str) or not token:
+            return False
+        created = maintenance_confirmations.get(token)
+        if created is None or time.time() - created > MAINTENANCE_CONFIRMATION_TIMEOUT:
+            maintenance_confirmations.pop(token, None)
+            return False
+        maintenance_confirmations.pop(token, None)
+        return True
 
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
@@ -1065,13 +1183,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif path == '/api/network':
             self.send_json({'network': get_network_info()})
 
+        elif path == '/api/mods':
+            self.send_json({'available': mod_manager is not None, 'mods': get_mods()})
+
+        elif path.startswith('/api/mods/'):
+            mod_id = urllib.parse.unquote(path[len('/api/mods/'):])
+            mod = get_mod(mod_id)
+            self.send_json({'mod': mod} if mod is not None else {'error': 'Mod not found'}, 200 if mod is not None else 404)
+
         else:
             self.send_response(404)
             self.end_headers()
 
     def do_POST(self):
         content_length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(content_length).decode() if content_length > 0 else ''
+        if content_length > 1024 * 1024:
+            self.send_json({'success': False, 'message': 'Request too large'}, 413)
+            return
+        body = self.rfile.read(content_length).decode('utf-8', errors='replace') if content_length > 0 else ''
         path = urllib.parse.urlparse(self.path).path
 
         if path == '/login':
@@ -1098,10 +1227,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if path == '/api/control':
-            try:
-                data = json.loads(body)
-            except json.JSONDecodeError:
+            data = self.read_json(body)
+            if data is None:
                 self.send_json({'success': False, 'message': 'Invalid request'})
+                return
+            if data.get('action') in ('stop', 'restart', 'update') and not self.maintenance_confirmed(data):
+                token = secrets.token_urlsafe(24)
+                maintenance_confirmations[token] = time.time()
+                self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token, 'message': 'Maintenance confirmation required before this action'}, 409)
                 return
 
             action = data.get('action', '')
@@ -1168,6 +1301,33 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     self.send_json({'success': False})
             except Exception as e:
                 self.send_json({'success': False, 'message': str(e)})
+
+        elif path.startswith('/api/mods/'):
+            parts = path.split('/')
+            if len(parts) != 5 or not parts[3] or not parts[4]:
+                self.send_json({'success': False, 'message': 'Invalid mod action'}, 400)
+                return
+            data = self.read_json(body)
+            if data is None:
+                self.send_json({'success': False, 'message': 'Invalid request'}, 400)
+                return
+            if not self.maintenance_confirmed(data):
+                token = secrets.token_urlsafe(24)
+                maintenance_confirmations[token] = time.time()
+                self.send_json({'success': False, 'requires_confirmation': True,
+                                'confirmation_token': token,
+                                'message': 'Mod changes may require server maintenance. Confirm explicitly to continue.'}, 409)
+                return
+            mod_id = urllib.parse.unquote(parts[3])
+            action = urllib.parse.unquote(parts[4])
+            try:
+                result = _mod_manager_call(('apply_action', 'mod_action', action), mod_id)
+                if result is None:
+                    self.send_json({'success': False, 'message': 'mod_manager does not support this action'}, 501)
+                else:
+                    self.send_json({'success': True, 'result': json_safe(result)})
+            except Exception as error:
+                self.send_json({'success': False, 'message': str(error)}, 500)
 
         else:
             self.send_response(404)
