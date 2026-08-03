@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class DeploymentConfigurationTests(unittest.TestCase):
     def test_catalog_is_versioned_and_entries_are_explicitly_server_safe(self):
         catalog = json.loads((ROOT / "mods" / "catalog.json").read_text())
-        self.assertEqual(catalog["schema_version"], 1)
+        self.assertEqual(catalog["schema_version"], 2)
         self.assertIsInstance(catalog["mods"], list)
         for entry in catalog["mods"]:
             self.assertTrue(entry["id"])
