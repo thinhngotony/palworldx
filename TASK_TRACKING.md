@@ -10,7 +10,7 @@ Updated: 2026-08-03
 | T4 | Security review | In progress | Security | Archive traversal, shell injection, permissions, auth boundaries | Review checklist |
 | T5 | Test harness | In progress | QA | Unit/integration checks without production interruption | Test command |
 | T6 | Documentation | Pending | Docs | Operator runbook and client installation instructions | Documentation review |
-| T7 | Release | Blocked | Main | Milestone commits and push to origin | GitHub credentials required |
+| T7 | Release | Completed | Main | Milestone commits and push to origin | GitHub main synchronized |
 
 ## Change log
 
