@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import tempfile
+import subprocess
 import time
 import zipfile
 from contextlib import contextmanager
@@ -277,35 +278,67 @@ def _archive_limits(infos: list[zipfile.ZipInfo], max_files: int, max_bytes: int
             raise UnsafeArchivePath(info.filename)
 
 
+def _stage_rar(source: Path, directory: Path, max_bytes: int, max_files: int) -> list[Path]:
+    """Validate bare RAR member names before extracting with bsdtar."""
+    try:
+        listing = subprocess.run(("bsdtar", "-tf", str(source)), check=True, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise ModManagerError("RAR support requires libarchive-tools (bsdtar)") from error
+    members = [validate_archive_member(line) for line in listing.stdout.splitlines() if line]
+    if not members or len(members) > max_files or len(set(members)) != len(members):
+        raise ModManagerError("invalid RAR member list")
+    try:
+        subprocess.run(("bsdtar", "-x", "-f", str(source), "-C", str(directory), "--no-same-owner", "--no-same-permissions"), check=True, capture_output=True, timeout=60)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise ModManagerError("RAR extraction failed") from error
+    files = [p for p in directory.rglob("*") if p.is_file() and not p.is_symlink()]
+    root = directory.resolve()
+    if len(files) > max_files or any(not _under(p.resolve(), root) for p in files):
+        raise UnsafeArchivePath("RAR extraction escaped staging directory")
+    total = sum(p.stat().st_size for p in files)
+    if total > max_bytes:
+        raise ModManagerError("archive size limit exceeded")
+    extracted_names = {p.relative_to(root).as_posix() for p in files}
+    expected_files = {name.rstrip("/") for name in members if not name.endswith("/")}
+    if extracted_names != expected_files:
+        raise UnsafeArchivePath("RAR extraction changed member set")
+    return files
+
+
 def stage_upload(archive: os.PathLike[str] | str, staging_root: os.PathLike[str] | str,
                  *, max_bytes: int = DEFAULT_MAX_UPLOAD_BYTES,
                  max_files: int = DEFAULT_MAX_FILES) -> dict[str, Any]:
-    """Validate and extract a ZIP into a private, controlled staging directory."""
+    """Validate and stage a ZIP, RAR, or single PAK file safely."""
     root = _controlled_root(staging_root)
     source = Path(archive).expanduser().resolve()
     if not source.is_file() or source.is_symlink():
         raise ModManagerError("upload must be a regular local file")
     if source.stat().st_size > max_bytes:
         raise ModManagerError("upload size limit exceeded")
-    with zipfile.ZipFile(source) as bundle:
-        infos = bundle.infolist()
-        _archive_limits(infos, max_files, max_bytes)
-        names = [validate_archive_member(info.filename) for info in infos]
-        if len(set(names)) != len(names):
-            raise UnsafeArchivePath("duplicate archive member")
-        directory = Path(tempfile.mkdtemp(prefix="upload-", dir=root))
-        try:
+    directory = Path(tempfile.mkdtemp(prefix="upload-", dir=root))
+    try:
+        if source.suffix.lower() == ".pak":
+            target = directory / source.name
+            shutil.copy2(source, target)
+            files = [target]
+        elif source.suffix.lower() == ".rar":
+            files = _stage_rar(source, directory, max_bytes, max_files)
+        else:
+            with zipfile.ZipFile(source) as bundle:
+                infos = bundle.infolist()
+                _archive_limits(infos, max_files, max_bytes)
+                names = [validate_archive_member(info.filename) for info in infos]
+                if len(set(names)) != len(names):
+                    raise UnsafeArchivePath("duplicate archive member")
             files = extract_archive_safely(source, directory)
-            # ZIPs can contain a directory and file with the same normalized name.
             if len({p.relative_to(directory).as_posix() for p in files}) != len(files):
                 raise UnsafeArchivePath("duplicate archive member")
-        except Exception:
-            shutil.rmtree(directory, ignore_errors=True)
-            raise
+    except Exception:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
     return {"staging_dir": directory, "archive": source, "sha256": sha256_file(source),
             "file_count": len(files), "bytes": sum(p.stat().st_size for p in files),
             "files": [p.relative_to(directory).as_posix() for p in files]}
-
 
 def inspect_packages(staging_dir: os.PathLike[str] | str) -> dict[str, Any]:
     """Identify supported PAK and UE4SS payloads without executing anything."""

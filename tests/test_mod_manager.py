@@ -75,6 +75,12 @@ class ModManagerTests(unittest.TestCase):
             with self.assertRaises(mod_manager.ModManagerError):
                 mod_manager.preview_plan(staged["staging_dir"], root / "server", "unknown")
 
+    def test_stage_single_pak_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); pak = root / "BNLrelease_P.pak"; pak.write_bytes(b"pak-data")
+            staged = mod_manager.stage_upload(pak, root / "staging")
+            self.assertEqual(staged["files"], ["BNLrelease_P.pak"])
+
     def test_backup_rollback_and_lock(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

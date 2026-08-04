@@ -1029,10 +1029,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <div class="mod-panel active" id="modPanelStage">
 <div class="mod-drop-zone" id="modDropZone" onclick="document.getElementById('modUpload').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');handleModDrop(event)">
 <div class="mod-drop-icon">&#128229;</div>
-<div class="mod-drop-label">Drop a ZIP package here</div>
-<div class="mod-drop-hint">or click to browse &middot; .zip files only &middot; Upload for inspection</div>
+<div class="mod-drop-label">Drop a ZIP, RAR, or PAK file here</div>
+<div class="mod-drop-hint">or click to browse · .zip, .rar, or .pak files only · Upload for inspection</div>
 </div>
-<input id="modUpload" type="file" accept=".zip" style="display:none" onchange="handleModFileSelect(this)">
+<input id="modUpload" type="file" accept=".zip,.rar,.pak" style="display:none" onchange="handleModFileSelect(this)">
 <button class="btn-primary" id="btnStageUpload" onclick="uploadMod()" style="width:100%">&#9654; Stage Package</button>
 </div>
 
@@ -1394,11 +1394,11 @@ function setModStep(step, advance=false) {
 
 function handleModDrop(e) {
   const files = e.dataTransfer.files;
-  if (files.length && files[0].name.endsWith('.zip')) {
+  if (files.length && /\.(zip|rar|pak)$/i.test(files[0].name)) {
     document.getElementById('modUpload').files = files;
     uploadMod();
   } else {
-    toast('Please drop a .zip file', 'error');
+    toast('Please drop a .zip, .rar, or .pak file', 'error');
   }
 }
 
@@ -1789,11 +1789,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             try:
                 parsed = BytesParser(policy=email_policy).parsebytes((f'Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n').encode() + raw_body)
                 upload = next((part for part in parsed.iter_attachments() if part.get_filename()), None)
-                if upload is None or not upload.get_filename().lower().endswith('.zip'):
-                    raise ValueError('A ZIP file is required')
+                if upload is None or not upload.get_filename().lower().endswith(('.zip', '.rar', '.pak')):
+                    raise ValueError('A ZIP, RAR, or PAK file is required')
                 staging = _mod_root() / 'staging'
                 staging.mkdir(parents=True, exist_ok=True)
-                target = staging / (secrets.token_hex(12) + '.zip')
+                filename = Path(upload.get_filename()).name
+                target = staging / (secrets.token_hex(12) + Path(filename).suffix.lower())
                 target.write_bytes(upload.get_payload(decode=True) or b'')
                 staged = stage_upload(target, staging)
                 self.send_json({'success': True, 'staged': staged})

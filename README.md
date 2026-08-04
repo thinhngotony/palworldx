@@ -28,10 +28,23 @@ sudo bash palworld.sh
 - ✅ **Interactive Menu** - Easy-to-use CLI interface
 - ✅ **Command Line Mode** - Perfect for automation and SSH
 - ✅ **Zero Dependencies** - Downloads and installs everything automatically
+- ✅ **Mod Uploads** - Safe ZIP, RAR, and direct PAK staging with preview and rollback
 - ✅ **Steam User Management** - Secure, runs as non-root user
 - ✅ **Live Console** - Attach to running server
 - ✅ **Real-time Logs** - Monitor server activity
 - ✅ **Status Monitoring** - Check server health and ports
+
+### Mod upload requirement
+
+The dashboard accepts `.zip`, `.rar`, and `.pak` mod packages. RAR support requires
+the Debian/Ubuntu package `libarchive-tools`, which provides `bsdtar`:
+
+```bash
+sudo apt-get install -y libarchive-tools
+```
+
+RAR members are listed and validated before extraction. Server installation still
+requires catalog approval, a preview, a backup, and explicit maintenance confirmation.
 
 ## 📋 All-in-One Commands
 
