@@ -1,0 +1,68 @@
+name: Deploy Dashboard
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy
+        required: true
+        default: main
+        type: string
+      confirm:
+        description: Type DEPLOY_DASHBOARD to confirm dashboard-only deployment
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ inputs.confirm == 'DEPLOY_DASHBOARD' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Validate release
+        run: |
+          python3 -m unittest discover -s tests
+          python3 -m py_compile dashboard.py mod_manager.py
+          bash -n palworld.sh
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+
+      - name: Deploy dashboard files
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_PORT: ${{ secrets.PRODUCTION_PORT }}
+        run: |
+          test -n "$PRODUCTION_HOST"
+          test -n "$PRODUCTION_PORT"
+          ssh -o StrictHostKeyChecking=yes -p "$PRODUCTION_PORT" root@"$PRODUCTION_HOST" 'test "$(pgrep -f "[P]alServer-Linux-Shipping" | tr "\n" " ")" != ""'
+          scp -P "$PRODUCTION_PORT" dashboard.py mod_manager.py root@"$PRODUCTION_HOST":/home/steam/
+          scp -P "$PRODUCTION_PORT" mods/catalog.json root@"$PRODUCTION_HOST":/home/steam/mods/catalog.json
+
+      - name: Restart dashboard only
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_PORT: ${{ secrets.PRODUCTION_PORT }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes -p "$PRODUCTION_PORT" root@"$PRODUCTION_HOST" \
+            'systemctl restart palworld-dashboard.service && systemctl is-active --quiet palworld-dashboard.service'
+
+      - name: Smoke test dashboard
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_PORT: ${{ secrets.PRODUCTION_PORT }}
+        run: |
+          curl --fail --silent --show-error "http://$PRODUCTION_HOST:8090/login" | grep -q 'Palworld Dashboard'

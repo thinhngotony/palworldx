@@ -17,9 +17,10 @@ class ModManagerTests(unittest.TestCase):
     def test_manifest_round_trip_and_enabled_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "manifest.json"
-            record = mod_manager.set_mod_enabled(path, "palpriority", True, version="1.0", source="local")
+            mod_manager.set_mod_enabled(path, "palpriority", True, version="1.0", source="local")
+            record = mod_manager.set_mod_state(path, "palpriority", "enable")
             self.assertTrue(record["enabled"])
-            self.assertFalse(mod_manager.set_mod_enabled(path, "palpriority", False)["enabled"])
+            self.assertFalse(mod_manager.set_mod_state(path, "palpriority", "disable")["enabled"])
 
     def test_archive_safety(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -66,7 +67,7 @@ class ModManagerTests(unittest.TestCase):
             record = mod_manager.apply_plan(plan, staged["staging_dir"], manifest)
             owned = root / "server" / "Mods/example.pak"
             self.assertTrue(owned.exists())
-            self.assertIn(str(owned), record["owned_files"])
+            self.assertIn(str(owned.resolve()), record["owned_files"])
             (root / "server" / "keep.txt").write_text("keep")
             mod_manager.set_mod_state(manifest, "approved", "disable")
             self.assertFalse(owned.exists())

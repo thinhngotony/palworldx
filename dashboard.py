@@ -29,9 +29,9 @@ from datetime import datetime
 # Configuration
 STEAM_USER = "steam"
 STEAM_HOME = f"/home/{STEAM_USER}"
-PALWORLD_DIR = f"{STEAM_HOME}/palworld-server"
-SCREEN_NAME = "palworld"
-DASHBOARD_PORT = 8080
+PALWORLD_DIR = f"{STEAM_HOME}/palworld-server-new"
+SCREEN_NAME = "palworld-new"
+DASHBOARD_PORT = 8090
 
 
 def _load_dashboard_password():
@@ -330,8 +330,30 @@ def get_mod(mod_id):
     return None
 
 
+def _mod_root():
+    return Path(PALWORLD_DIR).resolve() / '.palworld-mods'
+
+
+def _confined_path(raw, root, label):
+    path = Path(raw).expanduser().resolve()
+    root = Path(root).expanduser().resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as error:
+        raise ValueError(f'{label} must be under {root}') from error
+    return path
+
+
+def _manifest_path():
+    return _mod_root() / 'manifest.json'
+
+
+def _backup_root():
+    return _mod_root() / 'backups'
+
+
 def _backend_call(names, *args, **kwargs):
-    """Call an optional backend contract method, preserving graceful absence."""
+    """Call an optional backend contract and JSON-safe the result."""
     result = _mod_manager_call(names, *args, **kwargs)
     return json_safe(result) if result is not None else None
 
@@ -350,6 +372,48 @@ def get_client_instructions(mod_id):
         return None
     return mod.get('client_instructions', mod.get('client', mod.get('instructions', [])))
 
+
+def _call_backend(names, *args, **kwargs):
+    """Invoke a required mod-manager operation and preserve explicit failures."""
+    if mod_manager is None:
+        raise RuntimeError("mod manager unavailable")
+    for name in names:
+        operation = getattr(mod_manager, name, None)
+        if callable(operation):
+            return operation(*args, **kwargs)
+    raise RuntimeError("mod manager operation unavailable: " + ", ".join(names))
+
+
+def stage_upload(*args, **kwargs):
+    return _call_backend(("stage_upload",), *args, **kwargs)
+
+
+def inspect_packages(*args, **kwargs):
+    return _call_backend(("inspect_packages",), *args, **kwargs)
+
+
+def preview_plan(*args, **kwargs):
+    return _call_backend(("preview_plan",), *args, **kwargs)
+
+
+def apply_plan(*args, **kwargs):
+    return _call_backend(("apply_plan",), *args, **kwargs)
+
+
+def batch_apply(*args, **kwargs):
+    return _call_backend(("batch_apply",), *args, **kwargs)
+
+
+def set_mod_state(*args, **kwargs):
+    return _call_backend(("set_mod_state",), *args, **kwargs)
+
+
+def create_mod_backup(*args, **kwargs):
+    return _call_backend(("create_backup",), *args, **kwargs)
+
+
+def rollback_mod_backup(*args, **kwargs):
+    return _call_backend(("rollback_backup",), *args, **kwargs)
 
 def get_network_info():
     """Get network/port status"""
@@ -871,6 +935,11 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
 <input id="modUpload" type="file" accept=".zip" style="color:var(--text-secondary);font-size:13px">
 <button class="btn-save" onclick="uploadMod()">Upload for inspection</button>
+<button class="btn-refresh" onclick="inspectStaged()">Inspect staged</button>
+<button class="btn-refresh" onclick="previewStaged()">Preview plan</button>
+<button class="btn-save" onclick="applyModPlan()">Apply plan</button>
+<button class="btn-refresh" onclick="createModBackup()">Create backup</button>
+<button class="btn-refresh" onclick="rollbackMod()">Rollback backup</button>
 </div>
 <div id="modList"><p style="color:var(--text-muted);font-size:13px">Loading...</p></div>
 <div id="modPreview" style="margin-top:16px"></div>
@@ -1146,30 +1215,22 @@ function refreshBackups() {
 // ─── Mods ───
 function refreshMods() {
   api('/api/mods').then(data => {
-    const el = document.getElementById('modList');
-    const mods = data.mods || [];
-    if(!mods.length) { el.textContent = data.available === false ? 'Mod backend is unavailable.' : 'No catalog mods found.'; return; }
-    el.innerHTML = '';
-    mods.forEach(mod => {
-      const row = document.createElement('div'); row.className = 'info-row';
-      const label = document.createElement('span'); label.className = 'info-label'; label.textContent = mod.name || mod.id || 'Unnamed mod';
-      const value = document.createElement('span'); value.className = 'info-value'; value.textContent = (mod.compatibility || mod.scope || 'unknown')+' · '+(mod.version || mod.status || '--');
-      row.appendChild(label); row.appendChild(value);
-      if(mod.id) { const b=document.createElement('button'); b.className='btn-refresh'; b.textContent='Instructions'; b.onclick=()=>showInstructions(mod.id); row.appendChild(b); }
-      el.appendChild(row);
-    });
-  }).catch(e => { document.getElementById('modList').textContent='Mods unavailable: '+e.message; });
+    const el=document.getElementById('modList'), mods=data.mods||[]; el.innerHTML='';
+    if(!mods.length){el.textContent=data.available===false?'Mod backend is unavailable.':'No catalog mods found.';return;}
+    mods.forEach(mod=>{const row=document.createElement('div');row.className='info-row';const label=document.createElement('span');label.className='info-label';label.textContent=mod.name||mod.id;row.appendChild(label);['Instructions','Enable','Disable','Remove'].forEach((text,i)=>{const b=document.createElement('button');b.className='btn-refresh';b.textContent=text;b.onclick=()=>i?modAction(mod.id,text.toLowerCase()):showInstructions(mod.id);row.appendChild(b);});el.appendChild(row);});
+  }).catch(e=>{document.getElementById('modList').textContent='Mods unavailable: '+e.message;});
 }
-function showInstructions(id) { api('/api/mods/'+encodeURIComponent(id)+'/instructions').then(d => { document.getElementById('modPreview').textContent=JSON.stringify(d.instructions || d, null, 2); }); }
+function modAction(id,action){if(!confirm('Confirm mod '+action+'?'))return;api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(d=>d.requires_confirmation&&confirm(d.message+' Continue?')?api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}):d).then(d=>d.success?(toast('Mod '+action+' complete','success'),refreshMods()):toast(d.message||'Mod action failed','error'));}
+function showInstructions(id) { api('/api/mods/'+encodeURIComponent(id)+'/instructions').then(d=>{document.getElementById('modPreview').textContent=JSON.stringify(d.instructions||d,null,2);}); }
 function uploadMod() {
-  const file=document.getElementById('modUpload').files[0]; if(!file) return toast('Choose a ZIP package first','error');
-  if(!confirm('Stage this upload for inspection? A maintenance confirmation is required.')) return;
-  const form=new FormData(); form.append('file',file);
-  api('/api/mods/upload', {method:'POST', body:form}).then(d=>{
-    if(d.requires_confirmation) { if(confirm(d.message+' Continue?')) { return api('/api/mods/upload',{method:'POST',headers:{'X-Maintenance-Confirmation':d.confirmation_token},body:form}); } return d; }
-    return d;
-  }).then(d=>{ if(d.success) { toast('Upload staged','success'); document.getElementById('modPreview').textContent=JSON.stringify(d.preview || d.result || d,null,2); } else toast(d.message||'Upload failed','error'); }).catch(e=>toast('Upload unavailable: '+e.message,'error'));
+  const file=document.getElementById('modUpload').files[0];if(!file)return toast('Choose a ZIP package first','error');if(!confirm('Stage this upload for inspection?'))return;const form=new FormData();form.append('file',file);
+  api('/api/mods/upload',{method:'POST',body:form}).then(d=>d.requires_confirmation&&confirm(d.message+' Continue?')?api('/api/mods/upload',{method:'POST',headers:{'X-Maintenance-Confirmation':d.confirmation_token},body:form}):d).then(d=>d.success?(toast('Upload staged','success'),document.getElementById('modPreview').textContent=JSON.stringify(d.staged,null,2)):toast(d.message||'Upload failed','error'));
 }
+function inspectStaged(){api('/api/mods/inspect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({staging_dir:prompt('Staging directory path', '')})}).then(d=>document.getElementById('modPreview').textContent=JSON.stringify(d,null,2));}
+function previewStaged(){const path=prompt('Staging directory path',''),id=prompt('Catalog mod ID','');if(path&&id)api('/api/mods/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({staging_dir:path,mod_id:id,target_root:'__PALWORLD_DIR__'})}).then(d=>{if(d.success){window.modPlan=d.result;window.modStaging=path;}document.getElementById('modPreview').textContent=JSON.stringify(d,null,2);});}
+function applyModPlan(){const plan=window.modPlan;if(!plan)return toast('Preview a plan before applying','error');const payload={plan:plan,staging_dir:window.modStaging||prompt('Staging directory path','')};const send=body=>api('/api/mods/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});send(payload).then(d=>d.requires_confirmation&&confirm(d.message||'Confirm applying this mod plan?')?send({...payload,maintenance_confirmation:d.confirmation_token}):d).then(d=>toast(d.message||'Apply requested',d.success?'success':'error')) .catch(e=>toast('Apply failed: '+e.message,'error'));}
+function createModBackup(){api('/api/mods/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(d=>d.requires_confirmation&&confirm('Create backup?')?api('/api/mods/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}):d).then(d=>toast(d.message||'Backup created',d.success?'success':'error'));}
+function rollbackMod(){const backup=prompt('Backup path','');if(!backup)return;const payload={backup_path:backup};const send=body=>api('/api/mods/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});send(payload).then(d=>d.requires_confirmation&&confirm(d.message||'Confirm rollback?')?send({...payload,maintenance_confirmation:d.confirmation_token}):d).then(d=>toast(d.message||'Rollback requested',d.success?'success':'error')).catch(e=>toast('Rollback failed: '+e.message,'error'));}
 function refreshModOperations() { Promise.all([api('/api/operations'),api('/api/mod-backups')]).then(([ops,backs])=>{ document.getElementById('modOperations').textContent=JSON.stringify({operations:ops.operations||[],backups:backs.backups||[]},null,2); }).catch(e=>document.getElementById('modOperations').textContent='Operations unavailable: '+e.message); }
 
 // ─── Refresh all ───
@@ -1216,6 +1277,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, TypeError):
             return None
         return data if isinstance(data, dict) else None
+
+    def require_authentication(self):
+        """Reject API requests until the login session has been validated."""
+        if self.is_authenticated():
+            return True
+        self.send_response(302)
+        self.send_header('Location', '/login')
+        self.end_headers()
+        return False
+
+    def validate_plan(self, plan):
+        """Ensure an untrusted preview cannot redirect deployment outside PALWORLD_DIR."""
+        if not isinstance(plan, dict) or not isinstance(plan.get('files'), list) or not plan['files']:
+            raise ValueError('plan with files is required')
+        for item in plan['files']:
+            if not isinstance(item, dict) or not item.get('destination'):
+                raise ValueError('invalid plan file')
+            _confined_path(item['destination'], PALWORLD_DIR, 'plan destination')
 
     def maintenance_confirmed(self, data):
         token = self.headers.get('X-Maintenance-Confirmation', '')
@@ -1308,6 +1387,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         raw_body = self.rfile.read(content_length) if content_length > 0 else b''
         body = raw_body.decode('utf-8', errors='replace')
         path = urllib.parse.urlparse(self.path).path
+        if path != '/login' and not self.is_authenticated():
+            self.send_response(302)
+            self.send_header('Location', '/login')
+            self.end_headers()
+            return
+        path = urllib.parse.urlparse(self.path).path
 
         if path == '/login':
             # Parse form data
@@ -1327,41 +1412,45 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self.send_html(html)
             return
 
-        # All other POST endpoints require auth
-        if not self.is_authenticated():
-            self.send_json({'error': 'Unauthorized'}, 401)
-            return
-
         if path in ('/api/mods/inspect', '/api/mods/preview'):
             data = self.read_json(body) or {}
-            source = data.get('path') or data.get('upload') or data.get('archive')
-            result = _backend_call(('inspect_upload', 'inspect_archive', 'preview_upload', 'preview'), source) if source else None
-            self.send_json({'success': result is not None, 'preview': result or {}, 'message': 'Inspection backend unavailable' if result is None else 'Inspection complete'}, 503 if result is None else 200)
+            try:
+                staging_dir = _confined_path(data.get('staging_dir'), _mod_root() / 'staging', 'staging_dir')
+                if path.endswith('/inspect'):
+                    result = inspect_packages(staging_dir)
+                else:
+                    mod_id = data.get('mod_id')
+                    if not mod_id:
+                        raise ValueError('mod_id is required')
+                    target_root = _confined_path(data.get('target_root', str(PALWORLD_DIR)), PALWORLD_DIR, 'target_root')
+                    result = preview_plan(staging_dir, target_root, mod_id, target=data.get('target', 'server'))
+                self.send_json({'success': True, 'result': result})
+            except Exception as error:
+                self.send_json({'success': False, 'message': str(error)}, 400)
             return
 
         if path == '/api/mods/upload':
             if not self.maintenance_confirmed(self.read_json(body) or {}):
                 token = secrets.token_urlsafe(24)
                 maintenance_confirmations[token] = time.time()
-                self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token, 'message': 'Maintenance confirmation required before staging an upload'}, 409)
+                self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token,
+                                'message': 'Maintenance confirmation required before staging an upload'}, 409)
                 return
             content_type = self.headers.get('Content-Type', '')
             if not content_type.startswith('multipart/form-data'):
                 self.send_json({'success': False, 'message': 'Expected multipart/form-data'}, 415)
                 return
             try:
-                boundary = content_type.split('boundary=', 1)[1].strip().strip('"')
                 parsed = BytesParser(policy=email_policy).parsebytes((f'Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n').encode() + raw_body)
-                parts = list(parsed.iter_attachments())
-                upload = next((part for part in parts if part.get_filename()), None)
+                upload = next((part for part in parsed.iter_attachments() if part.get_filename()), None)
                 if upload is None or not upload.get_filename().lower().endswith('.zip'):
                     raise ValueError('A ZIP file is required')
-                staging = Path(PALWORLD_DIR) / '.palworld-mods' / 'staging'
+                staging = _mod_root() / 'staging'
                 staging.mkdir(parents=True, exist_ok=True)
                 target = staging / (secrets.token_hex(12) + '.zip')
                 target.write_bytes(upload.get_payload(decode=True) or b'')
-                preview = _backend_call(('inspect_upload', 'inspect_archive', 'preview_upload'), str(target))
-                self.send_json({'success': True, 'staged': str(target), 'preview': preview or {'file': target.name, 'size': target.stat().st_size}})
+                staged = stage_upload(target, staging)
+                self.send_json({'success': True, 'staged': staged})
             except Exception as error:
                 self.send_json({'success': False, 'message': str(error)}, 400)
             return
@@ -1408,6 +1497,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     'message': 'Server stopped successfully' if stopped else 'Failed to stop server'
                 })
 
+
             elif action == 'restart':
                 # Stop
                 if is_server_running():
@@ -1426,7 +1516,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 })
 
             elif action == 'update':
-                # Run update in background
                 update_command = (
                     f'cd {shlex.quote(STEAM_HOME + "/steamcmd")} && '
                     f'./steamcmd.sh +force_install_dir {shlex.quote(PALWORLD_DIR)} '
@@ -1436,30 +1525,50 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 run_as_steam(update_command)
                 self.send_json({'success': True, 'message': 'Update started in background (check /tmp/palworld-update.log)'})
 
-            else:
-                self.send_json({'success': False, 'message': 'Unknown action'})
-
-        elif path == '/api/config':
+        elif path == '/api/mods/backup':
+            data = self.read_json(body) or {}
+            if not self.maintenance_confirmed(data):
+                token = secrets.token_urlsafe(24); maintenance_confirmations[token] = time.time()
+                self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token}, 409); return
             try:
-                data = json.loads(body)
-                config_content = data.get('config', '')
-                if save_config(config_content):
-                    self.send_json({'success': True})
-                else:
-                    self.send_json({'success': False})
-            except Exception as e:
-                self.send_json({'success': False, 'message': str(e)})
+                result = create_mod_backup(_manifest_path(), _backup_root(), data.get('label', 'manifest'))
+                self.send_json({'success': True, 'result': result})
+            except Exception as error:
+                self.send_json({'success': False, 'message': str(error)}, 400)
 
         elif path in ('/api/mods/apply', '/api/mods/rollback'):
             data = self.read_json(body) or {}
-            if not self.maintenance_confirmed(data):
-                token = secrets.token_urlsafe(24)
-                maintenance_confirmations[token] = time.time()
-                self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token, 'message': 'Maintenance confirmation required before this operation'}, 409)
+            try:
+                if path.endswith('/apply'):
+                    staging = _confined_path(data.get('staging_dir'), _mod_root() / 'staging', 'staging_dir')
+                    plan = data.get('plan')
+                    if isinstance(plan, dict):
+                        for item in plan.get('files', []):
+                            if isinstance(item, dict) and item.get('destination'):
+                                _confined_path(item['destination'], PALWORLD_DIR, 'plan destination')
+                else:
+                    _confined_path(data.get('backup') or data.get('backup_path'), _backup_root(), 'backup_path')
+            except Exception as error:
+                self.send_json({'success': False, 'message': str(error)}, 400)
                 return
-            action = 'apply' if path.endswith('/apply') else 'rollback'
-            result = _backend_call((action, 'apply_operation' if action == 'apply' else 'rollback_operation'), data)
-            self.send_json({'success': result is not None, 'result': result, 'message': 'Backend unavailable' if result is None else action.title() + ' complete'}, 503 if result is None else 200)
+            if not self.maintenance_confirmed(data):
+                token = secrets.token_urlsafe(24); maintenance_confirmations[token] = time.time()
+                self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token}, 409); return
+            try:
+                if path.endswith('/apply'):
+                    manifest = _confined_path(data.get('manifest_path', str(_manifest_path())), _mod_root(), 'manifest_path')
+                    if not isinstance(plan, dict): raise ValueError('plan is required')
+                    result = apply_plan(plan, staging, manifest)
+                else:
+                    backup = _confined_path(data.get('backup') or data.get('backup_path'), _backup_root(), 'backup_path')
+                    target = _confined_path(data.get('target', str(_manifest_path())), _mod_root(), 'target')
+                    result = rollback_mod_backup(backup, target)
+                if result is False or (isinstance(result, dict) and result.get('applied') is False): raise RuntimeError('backend reported operation was not applied')
+                self.send_json({'success': True, 'result': result})
+            except Exception as error:
+                self.send_json({'success': False, 'message': str(error)}, 400)
+
+
 
         elif path.startswith('/api/mods/'):
             parts = path.split('/')
@@ -1473,27 +1582,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not self.maintenance_confirmed(data):
                 token = secrets.token_urlsafe(24)
                 maintenance_confirmations[token] = time.time()
-                self.send_json({'success': False, 'requires_confirmation': True,
-                                'confirmation_token': token,
+                self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token,
                                 'message': 'Mod changes may require server maintenance. Confirm explicitly to continue.'}, 409)
                 return
             mod_id = urllib.parse.unquote(parts[3])
             action = urllib.parse.unquote(parts[4])
+            if action not in {'enable', 'disable', 'remove'}:
+                self.send_json({'success': False, 'message': 'Unsupported mod action'}, 400)
+                return
             try:
-                if mod_manager is None:
-                    result = None
-                elif callable(getattr(mod_manager, 'apply_action', None)):
-                    result = mod_manager.apply_action(mod_id, action, f"{PALWORLD_DIR}/.palworld-mods/manifest.json")
-                elif callable(getattr(mod_manager, 'mod_action', None)):
-                    result = mod_manager.mod_action(mod_id, action)
-                else:
-                    result = _mod_manager_call((action,), mod_id)
-                if result is None:
-                    self.send_json({'success': False, 'message': 'mod_manager does not support this action'}, 501)
-                else:
-                    self.send_json({'success': True, 'result': json_safe(result)})
+                manifest_path = _confined_path(data.get('manifest_path', str(_manifest_path())), _mod_root(), 'manifest_path')
+                result = set_mod_state(manifest_path, mod_id, action)
+                if result is False or (isinstance(result, dict) and result.get('applied') is False):
+                    raise RuntimeError('backend reported operation was not applied')
+                self.send_json({'success': True, 'result': result})
             except Exception as error:
-                self.send_json({'success': False, 'message': str(error)}, 500)
+                self.send_json({'success': False, 'message': str(error)}, 400)
 
         else:
             self.send_response(404)
@@ -1501,7 +1605,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
 
 class ThreadedHTTPServer(HTTPServer):
-    """Handle requests in separate threads"""
     def process_request(self, request, client_address):
         thread = threading.Thread(target=self._handle, args=(request, client_address))
         thread.daemon = True

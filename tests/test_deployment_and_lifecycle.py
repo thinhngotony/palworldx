@@ -21,8 +21,8 @@ class DeploymentConfigurationTests(unittest.TestCase):
 
     def test_dashboard_configuration_uses_expected_bind_port_and_http_only_local_test_surface(self):
         source = (ROOT / "dashboard.py").read_text()
-        self.assertIn("DASHBOARD_PORT = 8080", source)
-        self.assertIn("ThreadedHTTPServer(('0.0.0.0', DASHBOARD_PORT)", source)
+        self.assertIn("DASHBOARD_PORT = 8090", source)
+        self.assertIn("ThreadedHTTPServer((\'0.0.0.0\', DASHBOARD_PORT)", source)
         self.assertIn("HttpOnly", source)
         self.assertNotIn("subprocess.Popen", source)
 

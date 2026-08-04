@@ -1,0 +1,18 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests
+      - name: Python compile
+        run: python3 -m py_compile dashboard.py mod_manager.py
+      - name: Shell syntax
+        run: bash -n palworld.sh
