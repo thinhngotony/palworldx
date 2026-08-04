@@ -1453,15 +1453,12 @@ function renderModCatalog() {
     const state = m.verification_state || 'unknown';
     const statusClass = safe ? (state === 'verified' ? 'ok' : 'warn') : 'blocked';
     const tagClass = state === 'verified' ? 'verified' : (state === 'unverified' ? 'unverified' : 'blocked');
+    const sources = (m.source_urls || []).filter(url => /^https?:\/\//i.test(url));
     return '<div class="mod-card" onclick="showModDetailPanel(\'' + encodeURIComponent(m.id) + '\')">' +
       '<div class="mod-card-head"><div class="mod-card-name">' + (m.name || m.id) + '</div><div class="mod-card-status ' + statusClass + '"></div></div>' +
       '<div class="mod-card-desc">' + (m.notes || m.server_install_gate || 'No description available.') + '</div>' +
-      '<div class="mod-card-tags">' +
-        '<span class="mod-tag scope">' + (m.scope || 'server') + '</span>' +
-        '<span class="mod-tag ' + tagClass + '">' + state + '</span>' +
-        (safe ? '' : '<span class="mod-tag blocked">blocked</span>') +
-      '</div>' +
-      (safe ? '<div class="mod-card-actions"><button class="btn-secondary" onclick="event.stopPropagation();modAction(\'' + encodeURIComponent(m.id) + '\',\'enable\')">Enable</button></div>' : '') +
+      '<div class="mod-card-tags"><span class="mod-tag scope">' + (m.scope || 'server') + '</span><span class="mod-tag ' + tagClass + '">' + state + '</span>' + (safe ? '' : '<span class="mod-tag blocked">blocked</span>') + '</div>' +
+      '<div class="mod-card-actions"><button class="btn-secondary" onclick="event.stopPropagation();showModDetailPanel(\'' + encodeURIComponent(m.id) + '\')">Details</button>' + (safe ? '<button class="btn-secondary" onclick="event.stopPropagation();modAction(\'' + encodeURIComponent(m.id) + '\',\'enable\')">Enable</button>' : '') + (sources.length ? '<a class="btn-secondary" href="' + sources[0] + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Reference</a>' : '') + '</div>' +
     '</div>';
   }).join('');
 }
@@ -1473,24 +1470,12 @@ function showModDetailPanel(encoded) {
   const safe = m.server_install_allowed === true;
   const state = m.verification_state || 'unknown';
   panel.style.display = 'block';
-  panel.innerHTML = '<div class="mod-detail-head">' +
-    '<div class="mod-detail-name">' + (m.name || m.id) + '</div>' +
-    '<button class="mod-detail-close" onclick="closeModDetail()">&times;</button>' +
-  '</div>' +
-  '<div class="mod-detail-grid">' +
-    '<div class="mod-detail-field"><div class="mod-detail-field-label">ID</div><div class="mod-detail-field-value">' + m.id + '</div></div>' +
-    '<div class="mod-detail-field"><div class="mod-detail-field-label">Scope</div><div class="mod-detail-field-value">' + (m.scope || 'server') + '</div></div>' +
-    '<div class="mod-detail-field"><div class="mod-detail-field-label">Verification</div><div class="mod-detail-field-value">' + state + '</div></div>' +
-    '<div class="mod-detail-field"><div class="mod-detail-field-label">Server Install</div><div class="mod-detail-field-value">' + (safe ? 'Allowed' : 'Blocked') + '</div></div>' +
-    (m.version ? '<div class="mod-detail-field"><div class="mod-detail-field-label">Version</div><div class="mod-detail-field-value">' + m.version + '</div></div>' : '') +
-  '</div>' +
-  (m.notes ? '<div class="mod-detail-notes">' + m.notes + '</div>' : '') +
-  '<div style="margin-top:14px;display:flex;gap:8px">' +
-    '<button class="btn-secondary" onclick="showInstructions(\'' + encoded + '\')">View Instructions</button>' +
-    (safe ? '<button class="btn-primary" onclick="modAction(\'' + encoded + '\',\'enable\')">Enable Mod</button>' : '') +
-  '</div>';
+  const sources = (m.source_urls || []).filter(url => /^https?:\/\//i.test(url));
+  const links = sources.map((url, index) => '<a class="btn-secondary" href="' + url + '" target="_blank" rel="noopener noreferrer">Reference' + (sources.length > 1 ? ' ' + (index + 1) : '') + '</a>').join('');
+  panel.innerHTML = '<div class="mod-detail-head"><div class="mod-detail-name">' + (m.name || m.id) + '</div><button class="mod-detail-close" onclick="closeModDetail()">&times;</button></div>' +
+    '<div class="mod-detail-grid"><div class="mod-detail-field"><div class="mod-detail-field-label">ID</div><div class="mod-detail-field-value">' + m.id + '</div></div><div class="mod-detail-field"><div class="mod-detail-field-label">Scope</div><div class="mod-detail-field-value">' + (m.scope || 'server') + '</div></div><div class="mod-detail-field"><div class="mod-detail-field-label">Verification</div><div class="mod-detail-field-value">' + state + '</div></div><div class="mod-detail-field"><div class="mod-detail-field-label">Server Install</div><div class="mod-detail-field-value">' + (safe ? 'Allowed' : 'Blocked') + '</div></div>' + (m.version ? '<div class="mod-detail-field"><div class="mod-detail-field-label">Version</div><div class="mod-detail-field-value">' + m.version + '</div></div>' : '') + '</div>' +
+    (m.notes ? '<div class="mod-detail-notes">' + m.notes + '</div>' : '') + '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">' + links + '<button class="btn-secondary" onclick="showInstructions(\'' + encoded + '\')">View Instructions</button>' + (safe ? '<button class="btn-primary" onclick="modAction(\'' + encoded + '\',\'enable\')">Enable Mod</button>' : '') + '</div>';
 }
-
 function closeModDetail() {
   const panel = document.getElementById('modDetailPanel');
   if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
