@@ -535,15 +535,90 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 .main{margin-left:260px;width:calc(100% - 260px);flex:1;padding:28px 32px;min-height:100vh;overflow:hidden}
 .page{min-width:0}.card,.stat-card{min-width:0;overflow:hidden}.page-header>*{min-width:0}
 .stats-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}.grid-2,.grid-3{grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))}
-.workflow{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.mod-toolbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}.mod-toolbar button{min-height:40px}.mod-toolbar label{min-width:0}
+.workflow{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .status-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;margin-bottom:24px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--radius)}
 .status-banner.offline{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2)}
 .status-banner-copy{display:flex;align-items:center;gap:12px}.status-banner-title{font-size:15px;font-weight:600}.status-banner-detail{font-size:12px;color:var(--text-secondary);margin-top:3px}
 .status-banner .status-dot{width:10px;height:10px}.status-banner-action{font-size:12px;color:var(--text-secondary);white-space:nowrap}
 .workflow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px}.workflow-step{padding:11px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:rgba(255,255,255,.025);font-size:12px;color:var(--text-muted)}.workflow-step strong{display:block;color:var(--text-secondary);font-size:11px;margin-bottom:4px}.workflow-step.active{border-color:rgba(88,80,236,.45);background:rgba(88,80,236,.1);color:var(--text-primary)}
-.mod-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:16px}.mod-toolbar label{flex:1 1 180px}.mod-toolbar input,.mod-toolbar select{display:block;width:100%;margin-top:6px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text-primary);font:inherit}.mod-toolbar label{font-size:11px;color:var(--text-muted);font-weight:600}.mod-feedback{min-height:20px;margin:10px 0;color:var(--text-secondary);font-size:12px}.mod-feedback.error{color:#fca5a5}.mod-feedback.success{color:#6ee7b7}
+.mod-feedback{min-height:20px;margin:10px 0;color:var(--text-secondary);font-size:12px}.mod-feedback.error{color:#fca5a5}.mod-feedback.success{color:#6ee7b7}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent-light);outline-offset:2px}
-.catalog-toolbar{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px}.catalog-toolbar label{font-size:11px;color:var(--text-muted);font-weight:600}.catalog-toolbar input,.catalog-toolbar select{display:block;width:100%;margin-top:6px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text-primary);font:inherit}.mod-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.05)}.mod-row:last-child{border-bottom:0}.mod-name{font-weight:600;font-size:13px}.mod-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.mod-badge{font-size:10px;padding:3px 7px;border-radius:5px;background:rgba(255,255,255,.06);color:var(--text-secondary)}.mod-badge.good{color:#6ee7b7;background:rgba(16,185,129,.1)}.mod-badge.warn{color:#fcd34d;background:rgba(245,158,11,.1)}.mod-badge.bad{color:#fca5a5;background:rgba(239,68,68,.1)}.mod-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.mod-detail{padding:14px;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:rgba(255,255,255,.025);color:var(--text-secondary);font-size:12px;line-height:1.6}.mod-detail strong{color:var(--text-primary)}
+/* ─── Mod Tab Redesign ─── */
+.mod-layout{display:grid;grid-template-columns:320px 1fr;gap:20px;margin-bottom:24px}
+.mod-layout.single-col{grid-template-columns:1fr}
+@media(max-width:900px){.mod-layout{grid-template-columns:1fr}}
+.mod-stepper{display:flex;flex-direction:column;gap:2px}
+.mod-step{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;position:relative}
+.mod-step:hover{background:rgba(255,255,255,.03)}
+.mod-step.active{background:rgba(88,80,236,.08)}
+.mod-step-num{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0;transition:all .2s}
+.mod-step.active .mod-step-num{border-color:var(--accent);background:rgba(88,80,236,.15);color:#a5b4fc}
+.mod-step.done .mod-step-num{border-color:var(--green);background:rgba(16,185,129,.15);color:#6ee7b7}
+.mod-step-text{min-width:0}
+.mod-step-title{font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:2px}
+.mod-step.active .mod-step-title{color:var(--text-primary)}
+.mod-step-desc{font-size:11.5px;color:var(--text-muted);line-height:1.4}
+.mod-step-connector{width:2px;height:8px;background:var(--border);margin-left:29px;border-radius:1px}
+.mod-apply-bar{display:flex;gap:8px;padding:16px;background:rgba(88,80,236,.06);border:1px solid rgba(88,80,236,.15);border-radius:var(--radius-sm);margin-top:12px}
+.mod-apply-bar .btn-primary{flex:1}
+.btn-primary{padding:10px 18px;background:linear-gradient(135deg,#5850ec,#7c3aed);color:#fff;border:none;border-radius:var(--radius-xs);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:38px}
+.btn-primary:hover{box-shadow:0 4px 16px var(--accent-glow);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none!important;box-shadow:none!important}
+.btn-secondary{padding:10px 18px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:var(--radius-xs);font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;transition:all .15s;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:38px}
+.btn-secondary:hover{background:rgba(255,255,255,.08);border-color:var(--border-hover);color:var(--text-primary)}
+.btn-secondary:disabled{opacity:.4;cursor:not-allowed}
+.btn-danger{padding:10px 18px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:var(--radius-xs);font-size:13px;font-weight:500;color:#fca5a5;cursor:pointer;transition:all .15s;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:38px}
+.btn-danger:hover{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.4)}
+.mod-panel{display:none}
+.mod-panel.active{display:block}
+.mod-drop-zone{border:2px dashed var(--border);border-radius:var(--radius-sm);padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:16px}
+.mod-drop-zone:hover,.mod-drop-zone.drag-over{border-color:var(--accent);background:rgba(88,80,236,.05)}
+.mod-drop-icon{font-size:28px;margin-bottom:8px;opacity:.5}
+.mod-drop-label{font-size:13px;color:var(--text-secondary);margin-bottom:4px}
+.mod-drop-hint{font-size:11px;color:var(--text-muted)}
+.mod-select-group{margin-bottom:16px}
+.mod-select-label{font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:block}
+.mod-select{width:100%;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text-primary);font:inherit;font-size:13px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.mod-select:focus{outline:none;border-color:var(--accent)}
+.catalog-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px}
+.catalog-search{flex:1;position:relative}
+.catalog-search input{width:100%;padding:10px 12px 10px 36px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text-primary);font:inherit;font-size:13px;transition:border-color .15s}
+.catalog-search input:focus{outline:none;border-color:var(--accent)}
+.catalog-search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px;pointer-events:none}
+.catalog-filter{min-width:140px}
+.catalog-count{font-size:12px;color:var(--text-muted);white-space:nowrap;padding:0 4px}
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.mod-card{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:var(--radius-sm);padding:18px;transition:all .15s;cursor:pointer;position:relative;overflow:hidden}
+.mod-card:hover{border-color:var(--border-hover);background:rgba(255,255,255,.04);transform:translateY(-1px)}
+.mod-card.selected{border-color:rgba(88,80,236,.4);background:rgba(88,80,236,.06)}
+.mod-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.mod-card-name{font-size:14px;font-weight:600;color:var(--text-primary);line-height:1.3;word-break:break-word}
+.mod-card-status{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.mod-card-status.ok{background:var(--green);box-shadow:0 0 6px var(--green-glow)}
+.mod-card-status.warn{background:var(--orange);box-shadow:0 0 6px var(--orange-glow)}
+.mod-card-status.blocked{background:var(--red);box-shadow:0 0 6px var(--red-glow)}
+.mod-card-desc{font-size:12px;color:var(--text-muted);line-height:1.5;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mod-card-tags{display:flex;gap:5px;flex-wrap:wrap}
+.mod-tag{font-size:10px;padding:3px 8px;border-radius:4px;font-weight:500;text-transform:uppercase;letter-spacing:.3px}
+.mod-tag.scope{background:rgba(139,92,246,.1);color:#a78bfa}
+.mod-tag.verified{background:rgba(16,185,129,.1);color:#6ee7b7}
+.mod-tag.unverified{background:rgba(245,158,11,.1);color:#fcd34d}
+.mod-tag.blocked{background:rgba(239,68,68,.1);color:#fca5a5}
+.mod-card-actions{display:flex;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.04)}
+.mod-card-actions button{flex:1}
+.mod-empty{text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px}
+.mod-empty-icon{font-size:32px;margin-bottom:10px;opacity:.4}
+.mod-detail-panel{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-top:16px}
+.mod-detail-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.mod-detail-name{font-size:16px;font-weight:700}
+.mod-detail-close{width:28px;height:28px;border-radius:var(--radius-xs);border:1px solid var(--border);background:none;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-size:14px}
+.mod-detail-close:hover{background:rgba(255,255,255,.05);color:var(--text-primary)}
+.mod-detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+.mod-detail-field{padding:10px 12px;background:rgba(255,255,255,.025);border-radius:var(--radius-xs)}
+.mod-detail-field-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.mod-detail-field-value{font-size:13px;font-weight:600;color:var(--text-primary)}
+.mod-detail-notes{font-size:13px;color:var(--text-secondary);line-height:1.6;padding:14px;background:rgba(255,255,255,.02);border-radius:var(--radius-xs);white-space:pre-wrap}
+.mod-result-box{background:#0d0d14;border:1px solid rgba(255,255,255,.06);border-radius:var(--radius-xs);padding:14px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;color:#a0aec0;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin-top:12px}
 @media(max-width:700px){.catalog-toolbar{grid-template-columns:1fr}.mod-row{grid-template-columns:1fr}.mod-actions{justify-content:flex-start}}
 @media(max-width:700px){.status-banner{align-items:flex-start;flex-direction:column}.workflow{grid-template-columns:repeat(2,1fr)}}
 
@@ -659,7 +734,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.sidebar-overlay.show{display:block}.mobile-menu-btn{display:flex}
 .main{width:100%;margin-left:0;padding:64px 16px 24px}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-2,.grid-3{grid-template-columns:1fr}.page-title{font-size:20px}.card{padding:18px}
 }
-@media(max-width:520px){.stats-grid{grid-template-columns:1fr}.controls-grid{grid-template-columns:1fr}.page-header{margin-bottom:18px}.page-subtitle{max-width:38ch}.workflow{grid-template-columns:repeat(2,minmax(0,1fr))}.workflow-step{min-height:68px}.mod-toolbar{grid-template-columns:1fr}.mod-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.mod-actions button{width:100%}.toast-container{left:12px;right:12px;top:12px}.toast{min-width:0;width:100%}}
+@media(max-width:520px){.stats-grid{grid-template-columns:1fr}.controls-grid{grid-template-columns:1fr}.page-header{margin-bottom:18px}.page-subtitle{max-width:38ch}.workflow{grid-template-columns:repeat(2,minmax(0,1fr))}.workflow-step{min-height:68px}.mod-grid{grid-template-columns:1fr}.mod-layout{grid-template-columns:1fr}.toast-container{left:12px;right:12px;top:12px}.toast{min-width:0;width:100%}}
 
 /* Scrollbar */
 ::-webkit-scrollbar{width:6px;height:6px}
@@ -924,16 +999,143 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 <!-- ═══ MODS PAGE ═══ -->
 <div class="page" id="page-mods">
-<div class="page-header"><div><div class="page-title">Mods</div><div class="page-subtitle">Stage, review, and safely configure server mods</div></div><div class="header-actions"><button class="btn-refresh" onclick="refreshMods()">&#x21bb; Refresh</button></div></div>
-<div class="card">
-<div class="card-header"><span class="card-title">Package workflow</span><button class="btn-refresh" onclick="refreshModOperations()">Refresh activity</button></div>
-<div class="workflow" aria-label="Mod package workflow"><div class="workflow-step active"><strong>1 · Stage</strong>Upload a ZIP package</div><div class="workflow-step"><strong>2 · Inspect</strong>Check package contents</div><div class="workflow-step"><strong>3 · Review</strong>Preview file changes</div><div class="workflow-step"><strong>4 · Backup</strong>Save current state</div><div class="workflow-step"><strong>5 · Apply</strong>Confirm the maintenance change</div><div class="workflow-step"><strong>6 · Restore</strong>Rollback if needed</div></div>
-<div class="mod-toolbar"><label>Package to stage<input id="modUpload" type="file" accept=".zip"></label><button class="btn-save" onclick="uploadMod()">Stage package · Upload for inspection</button><label>Staged package<select id="modStagingSelect"><option value="">Upload a package first</option></select></label><label>Catalog mod<select id="modCatalogSelect"><option value="">Select a catalog mod</option></select></label><label>Target<select id="modTargetSelect"><option value="server">Server</option><option value="client">Client</option></select></label></div>
-<div class="mod-toolbar"><button class="btn-refresh" onclick="inspectStaged()">Inspect package</button><button class="btn-refresh" onclick="previewStaged()">Review changes</button><button class="btn-save" onclick="applyModPlan()">Apply changes</button><button class="btn-refresh" onclick="createModBackup()">Create backup</button><label>Restore backup<select id="modBackupSelect"><option value="">No backups available</option></select></label><button class="btn-refresh" onclick="rollbackMod()">Restore selected</button></div>
-<div id="modFeedback" class="mod-feedback" role="status" aria-live="polite"></div><div id="modPreview" style="margin-top:16px;white-space:pre-wrap"></div><div id="modOperations" style="margin-top:16px"></div>
-<p style="color:var(--text-muted);font-size:12px;margin-top:16px">Stage and review packages while the server stays online. Applying changes requires a fresh maintenance confirmation.</p>
+<div class="page-header">
+<div>
+<div class="page-title">Mods</div>
+<div class="page-subtitle">Stage, review, and safely configure server mods</div>
 </div>
-<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Catalog and installed state</span></div><div class="catalog-toolbar"><label>Search mods<input id="modSearch" type="search" placeholder="Search by name or ID" oninput="renderModCatalog()"></label><label>Filter<select id="modFilter" onchange="renderModCatalog()"><option value="all">All mods</option><option value="server">Server eligible</option><option value="client">Client only</option><option value="blocked">Blocked or unverified</option></select></label></div><div id="modDetail" class="mod-detail" hidden></div><div id="modList"><p style="color:var(--text-muted);font-size:13px">Loading catalog...</p></div></div>
+<div class="header-actions">
+<button class="btn-refresh" onclick="refreshMods()">&#x21bb; Refresh</button>
+</div>
+</div>
+
+<div class="mod-layout" id="modLayout">
+<!-- Left: Workflow Stepper + Actions -->
+<div class="card" style="padding:16px">
+<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Workflow</div>
+<div class="mod-stepper">
+<div class="mod-step active" data-step="stage" onclick="setModStep('stage')">
+<div class="mod-step-num">1</div>
+<div class="mod-step-text">
+<div class="mod-step-title">Stage</div>
+<div class="mod-step-desc">Upload a ZIP package for inspection</div>
+</div>
+</div>
+<div class="mod-step-connector"></div>
+<div class="mod-step" data-step="inspect" onclick="setModStep('inspect')">
+<div class="mod-step-num">2</div>
+<div class="mod-step-text">
+<div class="mod-step-title">Inspect</div>
+<div class="mod-step-desc">Verify package contents and structure</div>
+</div>
+</div>
+<div class="mod-step-connector"></div>
+<div class="mod-step" data-step="review" onclick="setModStep('review')">
+<div class="mod-step-num">3</div>
+<div class="mod-step-text">
+<div class="mod-step-title">Review</div>
+<div class="mod-step-desc">Preview file changes before applying</div>
+</div>
+</div>
+<div class="mod-step-connector"></div>
+<div class="mod-step" data-step="apply" onclick="setModStep('apply')">
+<div class="mod-step-num">4</div>
+<div class="mod-step-text">
+<div class="mod-step-title">Apply</div>
+<div class="mod-step-desc">Confirm maintenance and deploy</div>
+</div>
+</div>
+<div class="mod-step-connector"></div>
+<div class="mod-step" data-step="backup" onclick="setModStep('backup')">
+<div class="mod-step-num">5</div>
+<div class="mod-step-text">
+<div class="mod-step-title">Backup</div>
+<div class="mod-step-desc">Save current state for rollback</div>
+</div>
+</div>
+</div>
+
+<!-- Step Panels -->
+<div class="mod-panel active" id="modPanelStage">
+<div class="mod-drop-zone" id="modDropZone" onclick="document.getElementById('modUpload').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');handleModDrop(event)">
+<div class="mod-drop-icon">&#128229;</div>
+<div class="mod-drop-label">Drop a ZIP package here</div>
+<div class="mod-drop-hint">or click to browse &middot; .zip files only &middot; Upload for inspection</div>
+</div>
+<input id="modUpload" type="file" accept=".zip" style="display:none" onchange="handleModFileSelect(this)">
+<button class="btn-primary" id="btnStageUpload" onclick="uploadMod()" style="width:100%">&#9654; Stage Package</button>
+</div>
+
+<div class="mod-panel" id="modPanelInspect">
+<div class="mod-select-group">
+<label class="mod-select-label">Staged package</label>
+<select id="modStagingSelect" class="mod-select"><option value="">Upload a package first</option></select>
+</div>
+<button class="btn-secondary" onclick="inspectStaged()" style="width:100%">&#128269; Inspect Package</button>
+</div>
+
+<div class="mod-panel" id="modPanelReview">
+<div class="mod-select-group">
+<label class="mod-select-label">Catalog mod</label>
+<select id="modCatalogSelect" class="mod-select"><option value="">Select a catalog mod</option></select>
+</div>
+<div class="mod-select-group">
+<label class="mod-select-label">Target</label>
+<select id="modTargetSelect" class="mod-select">
+<option value="server">Server</option>
+<option value="client">Client</option>
+</select>
+</div>
+<button class="btn-secondary" onclick="previewStaged()" style="width:100%">&#128065; Review Changes</button>
+</div>
+
+<div class="mod-panel" id="modPanelApply">
+<div class="mod-apply-bar">
+<button class="btn-primary" onclick="applyModPlan()">Apply Changes</button>
+</div>
+</div>
+
+<div class="mod-panel" id="modPanelBackup">
+<div style="display:flex;flex-direction:column;gap:10px">
+<button class="btn-secondary" onclick="createModBackup()" style="width:100%">&#128190; Create Backup</button>
+<div class="mod-select-group">
+<label class="mod-select-label">Restore from backup</label>
+<select id="modBackupSelect" class="mod-select"><option value="">No backups available</option></select>
+</div>
+<button class="btn-danger" onclick="rollbackMod()" style="width:100%">&#8634; Restore Selected</button>
+</div>
+</div>
+
+<div id="modFeedback" class="mod-feedback" role="status" aria-live="polite"></div>
+</div>
+
+<!-- Right: Catalog Browser -->
+<div>
+<div class="card" style="padding:16px">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Catalog</div>
+<span class="catalog-count" id="modCount"></span>
+</div>
+<div class="catalog-toolbar">
+<div class="catalog-search">
+<span class="catalog-search-icon">&#128269;</span>
+<input id="modSearch" type="search" placeholder="Search mods..." oninput="renderModCatalog()">
+</div>
+<select id="modFilter" class="mod-select catalog-filter" onchange="renderModCatalog()">
+<option value="all">All mods</option>
+<option value="server">Server eligible</option>
+<option value="client">Client only</option>
+<option value="blocked">Blocked</option>
+</select>
+</div>
+<div id="modDetailPanel" class="mod-detail-panel" style="display:none"></div>
+<div id="modGrid" class="mod-grid"><p class="mod-empty"><span class="mod-empty-icon">&#128230;</span><br>Loading catalog...</p></div>
+</div>
+<div id="modResultBox" class="mod-result-box" style="display:none;margin-top:12px"></div>
+</div>
+</div>
+
+<div id="modOperations" style="margin-top:16px"></div>
 </div>
 
 <!-- ═══ SYSTEM PAGE ═══ -->
@@ -1202,46 +1404,223 @@ function refreshBackups() {
   });
 }
 
+// ─── Mod Tab State ───
+let modCurrentStep = 'stage';
+const modStepOrder = ['stage','inspect','review','apply','backup'];
+
+function setModStep(step) {
+  modCurrentStep = step;
+  document.querySelectorAll('.mod-step').forEach(el => {
+    const s = el.dataset.step;
+    el.classList.toggle('active', s === step);
+    el.classList.toggle('done', modStepOrder.indexOf(s) < modStepOrder.indexOf(step));
+  });
+  document.querySelectorAll('.mod-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('modPanel' + step.charAt(0).toUpperCase() + step.slice(1));
+  if (panel) panel.classList.add('active');
+}
+
+function handleModDrop(e) {
+  const files = e.dataTransfer.files;
+  if (files.length && files[0].name.endsWith('.zip')) {
+    document.getElementById('modUpload').files = files;
+    uploadMod();
+  } else {
+    toast('Please drop a .zip file', 'error');
+  }
+}
+
+function handleModFileSelect(input) {
+  const zone = document.getElementById('modDropZone');
+  if (input.files.length && zone) zone.querySelector('.mod-drop-label').textContent = input.files[0].name;
+}
+
+function showModResult(text) {
+  const box = document.getElementById('modResultBox');
+  if (!box) return;
+  box.style.display = 'block';
+  box.textContent = text;
+}
+
 function refreshMods() {
   api('/api/mods').then(data => {
     modCatalog = data.mods || [];
     const catalog = document.getElementById('modCatalogSelect');
-    catalog.innerHTML = '<option value="">Select a catalog mod</option>' + modCatalog.map(m => '<option value="' + encodeURIComponent(m.id) + '">' + (m.name || m.id) + '</option>').join('');
+    if (catalog) {
+      catalog.innerHTML = '<option value="">Select a catalog mod</option>' + modCatalog.map(m => '<option value="' + encodeURIComponent(m.id) + '">' + (m.name || m.id) + '</option>').join('');
+    }
     renderModCatalog();
-  }).catch(e => { document.getElementById('modList').textContent = 'Mods unavailable: ' + e.message; });
+  }).catch(e => {
+    const grid = document.getElementById('modGrid');
+    if (grid) grid.innerHTML = '<p class="mod-empty">Mods unavailable: ' + e.message + '</p>';
+  });
 }
+
 function renderModCatalog() {
   const query = (document.getElementById('modSearch')?.value || '').toLowerCase();
   const filter = document.getElementById('modFilter')?.value || 'all';
   const visible = modCatalog.filter(m => {
-    const text = ((m.name || '') + ' ' + (m.id || '')).toLowerCase();
+    const text = ((m.name || '') + ' ' + (m.id || '') + ' ' + (m.notes || '')).toLowerCase();
     const allowed = m.server_install_allowed === true;
     const client = m.scope === 'client';
     const blocked = !allowed || m.verification_state === 'unknown' || m.verification_state === 'unverified';
     return (!query || text.includes(query)) && (filter === 'all' || (filter === 'server' && allowed) || (filter === 'client' && client) || (filter === 'blocked' && blocked));
   });
-  const el = document.getElementById('modList');
-  if (!visible.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:12px 0">No matching mods. Try another search or filter.</p>'; return; }
-  el.innerHTML = visible.map(m => {
-    const safe = m.server_install_allowed === true, state = m.verification_state || 'unknown';
-    return '<div class="mod-row"><div><div class="mod-name">' + (m.name || m.id) + '</div><div class="mod-meta"><span class="mod-badge">' + (m.scope || 'unknown') + '</span><span class="mod-badge ' + (safe ? 'good' : 'bad') + '">' + (safe ? 'Server eligible' : 'Install blocked') + '</span><span class="mod-badge ' + (state === 'verified' ? 'good' : 'warn') + '">' + state + '</span></div></div><div class="mod-actions"><button class="btn-refresh" onclick="showModDetail(\'' + encodeURIComponent(m.id) + '\')">Details</button>' + (safe ? '<button class="btn-refresh" onclick="modAction(\'' + encodeURIComponent(m.id) + '\',\'enable\')">Enable</button>' : '') + '</div></div>';
+
+  const countEl = document.getElementById('modCount');
+  if (countEl) countEl.textContent = visible.length + ' mod' + (visible.length !== 1 ? 's' : '');
+
+  const grid = document.getElementById('modGrid');
+  if (!grid) return;
+  if (!visible.length) {
+    grid.innerHTML = '<p class="mod-empty"><span class="mod-empty-icon">&#128269;</span><br>No mods found. Try a different search or filter.</p>';
+    return;
+  }
+  grid.innerHTML = visible.map(m => {
+    const safe = m.server_install_allowed === true;
+    const state = m.verification_state || 'unknown';
+    const statusClass = safe ? (state === 'verified' ? 'ok' : 'warn') : 'blocked';
+    const tagClass = state === 'verified' ? 'verified' : (state === 'unverified' ? 'unverified' : 'blocked');
+    return '<div class="mod-card" onclick="showModDetailPanel(\'' + encodeURIComponent(m.id) + '\')">' +
+      '<div class="mod-card-head"><div class="mod-card-name">' + (m.name || m.id) + '</div><div class="mod-card-status ' + statusClass + '"></div></div>' +
+      '<div class="mod-card-desc">' + (m.notes || m.server_install_gate || 'No description available.') + '</div>' +
+      '<div class="mod-card-tags">' +
+        '<span class="mod-tag scope">' + (m.scope || 'server') + '</span>' +
+        '<span class="mod-tag ' + tagClass + '">' + state + '</span>' +
+        (safe ? '' : '<span class="mod-tag blocked">blocked</span>') +
+      '</div>' +
+      (safe ? '<div class="mod-card-actions"><button class="btn-secondary" onclick="event.stopPropagation();modAction(\'' + encodeURIComponent(m.id) + '\',\'enable\')">Enable</button></div>' : '') +
+    '</div>';
   }).join('');
 }
-function showModDetail(encoded) {
-  const m = modCatalog.find(x => x.id === decodeURIComponent(encoded)), el = document.getElementById('modDetail');
-  if (!m || !el) return;
-  el.hidden = false;
-  el.innerHTML = '<strong>' + m.name + '</strong><br>Scope: ' + (m.scope || 'unknown') + ' · Verification: ' + (m.verification_state || 'unknown') + '<br>' + (m.server_install_gate || m.client_instructions || m.notes || 'Review the release documentation before making changes.') + '<br><button class="btn-refresh" onclick="showInstructions(\'' + encoded + '\')">View instructions</button>';
+
+function showModDetailPanel(encoded) {
+  const m = modCatalog.find(x => x.id === decodeURIComponent(encoded));
+  const panel = document.getElementById('modDetailPanel');
+  if (!m || !panel) return;
+  const safe = m.server_install_allowed === true;
+  const state = m.verification_state || 'unknown';
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="mod-detail-head">' +
+    '<div class="mod-detail-name">' + (m.name || m.id) + '</div>' +
+    '<button class="mod-detail-close" onclick="closeModDetail()">&times;</button>' +
+  '</div>' +
+  '<div class="mod-detail-grid">' +
+    '<div class="mod-detail-field"><div class="mod-detail-field-label">ID</div><div class="mod-detail-field-value">' + m.id + '</div></div>' +
+    '<div class="mod-detail-field"><div class="mod-detail-field-label">Scope</div><div class="mod-detail-field-value">' + (m.scope || 'server') + '</div></div>' +
+    '<div class="mod-detail-field"><div class="mod-detail-field-label">Verification</div><div class="mod-detail-field-value">' + state + '</div></div>' +
+    '<div class="mod-detail-field"><div class="mod-detail-field-label">Server Install</div><div class="mod-detail-field-value">' + (safe ? 'Allowed' : 'Blocked') + '</div></div>' +
+    (m.version ? '<div class="mod-detail-field"><div class="mod-detail-field-label">Version</div><div class="mod-detail-field-value">' + m.version + '</div></div>' : '') +
+  '</div>' +
+  (m.notes ? '<div class="mod-detail-notes">' + m.notes + '</div>' : '') +
+  '<div style="margin-top:14px;display:flex;gap:8px">' +
+    '<button class="btn-secondary" onclick="showInstructions(\'' + encoded + '\')">View Instructions</button>' +
+    (safe ? '<button class="btn-primary" onclick="modAction(\'' + encoded + '\',\'enable\')">Enable Mod</button>' : '') +
+  '</div>';
 }
-function refreshModOperations(){api('/api/operations').then(d=>{document.getElementById('modOperations').textContent=JSON.stringify(d.operations||[],null,2);});api('/api/mod-backups').then(d=>{const s=document.getElementById('modBackupSelect');s.innerHTML='<option value="">Select a backup</option>'+(d.backups||[]).map(b=>'<option value="'+encodeURIComponent(b.path||b.name||'')+'">'+(b.name||b.path||'backup')+'</option>').join('');});}
-function modAction(id,action){if(!confirm('Confirm mod '+action+'?'))return;api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(d=>d.requires_confirmation&&confirm(d.message+' Continue?')?api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}):d).then(d=>d.success?(toast('Mod '+action+' complete','success'),refreshMods(),refreshModOperations()):toast(d.message||'Mod action failed','error'));}
-function showInstructions(id) { api('/api/mods/'+encodeURIComponent(id)+'/instructions').then(d=>{document.getElementById('modPreview').textContent=JSON.stringify(d.instructions||d,null,2);}); }
-function uploadMod() { const file=document.getElementById('modUpload').files[0]; if(!file)return toast('Choose a ZIP package first','error'); if(!confirm('Stage this upload for inspection?'))return; const form=new FormData();form.append('file',file);api('/api/mods/upload',{method:'POST',body:form}).then(d=>d.requires_confirmation&&confirm(d.message+' Continue?')?api('/api/mods/upload',{method:'POST',headers:{'X-Maintenance-Confirmation':d.confirmation_token},body:form}):d).then(d=>{if(!d.success)return toast(d.message||'Upload failed','error');window.modStaging=d.staged.staging_dir;const s=document.getElementById('modStagingSelect');s.innerHTML='<option value="'+window.modStaging+'">'+window.modStaging+'</option>';document.getElementById('modPreview').textContent=JSON.stringify(d.staged,null,2);toast('Upload staged','success');refreshModOperations();}); }
-function inspectStaged(){const path=document.getElementById('modStagingSelect').value;if(!path)return toast('Upload a package first','error');api('/api/mods/inspect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({staging_dir:path})}).then(d=>document.getElementById('modPreview').textContent=JSON.stringify(d,null,2));}
-function previewStaged(){const path=document.getElementById('modStagingSelect').value,id=decodeURIComponent(document.getElementById('modCatalogSelect').value),target=document.getElementById('modTargetSelect').value;if(!path||!id)return toast('Select staged package and catalog mod','error');api('/api/mods/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({staging_dir:path,mod_id:id,target_root:'__PALWORLD_DIR__',target:target})}).then(d=>{if(d.success)window.modPlan=d.result;document.getElementById('modPreview').textContent=JSON.stringify(d,null,2);});}
-function applyModPlan(){const plan=window.modPlan,path=document.getElementById('modStagingSelect').value;if(!plan||!path)return toast('Preview a plan before applying','error');const payload={plan:plan,staging_dir:path};const send=body=>api('/api/mods/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});send(payload).then(d=>d.requires_confirmation&&confirm(d.message||'Confirm applying this mod plan?')?send({...payload,maintenance_confirmation:d.confirmation_token}):d).then(d=>{toast(d.message||JSON.stringify(d.result||d),d.success?'success':'error');refreshMods();refreshModOperations();}).catch(e=>toast('Apply failed: '+e.message,'error'));}
-function createModBackup(){api('/api/mods/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(d=>d.requires_confirmation&&confirm('Create backup?')?api('/api/mods/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}):d).then(d=>{toast(d.message||'Backup created',d.success?'success':'error');refreshModOperations();});}
-function rollbackMod(){const backup=decodeURIComponent(document.getElementById('modBackupSelect').value);if(!backup)return toast('Select a backup first','error');const payload={backup_path:backup};const send=body=>api('/api/mods/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});send(payload).then(d=>d.requires_confirmation&&confirm(d.message||'Confirm rollback?')?send({...payload,maintenance_confirmation:d.confirmation_token}):d).then(d=>{toast(d.message||'Rollback requested',d.success?'success':'error');refreshModOperations();}).catch(e=>toast('Rollback failed: '+e.message,'error'));}
+
+function closeModDetail() {
+  const panel = document.getElementById('modDetailPanel');
+  if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
+}
+
+function refreshModOperations() {
+  api('/api/operations').then(d => {
+    const el = document.getElementById('modOperations');
+    const ops = d.operations || [];
+    if (el) {
+      if (!ops.length) { el.innerHTML = ''; return; }
+      el.innerHTML = '<div class="card" style="padding:16px;margin-top:12px"><div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Recent Activity</div>' +
+        ops.slice(0, 5).map(op => '<div class="info-row"><span class="info-label">' + (op.action || op.type || 'operation') + '</span><span class="info-value">' + (op.timestamp || op.date || '') + '</span></div>').join('') +
+      '</div>';
+    }
+  });
+  api('/api/mod-backups').then(d => {
+    const s = document.getElementById('modBackupSelect');
+    if (s) s.innerHTML = '<option value="">Select a backup</option>' + (d.backups || []).map(b => '<option value="' + encodeURIComponent(b.path || b.name || '') + '">' + (b.name || b.path || 'backup') + '</option>').join('');
+  });
+}
+
+function modAction(id, action) {
+  const modId = decodeURIComponent(id);
+  if (!confirm('Confirm mod ' + action + '?')) return;
+  api('/api/mods/' + encodeURIComponent(modId) + '/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(d => d.requires_confirmation && confirm(d.message + ' Continue?') ? api('/api/mods/' + encodeURIComponent(modId) + '/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maintenance_confirmation: d.confirmation_token }) }) : d)
+    .then(d => { if (d.success) { toast('Mod ' + action + ' complete', 'success'); refreshMods(); refreshModOperations(); } else { toast(d.message || 'Mod action failed', 'error'); } });
+}
+
+function showInstructions(id) {
+  const modId = decodeURIComponent(id);
+  api('/api/mods/' + encodeURIComponent(modId) + '/instructions').then(d => {
+    showModResult(JSON.stringify(d.instructions || d, null, 2));
+  });
+}
+
+function uploadMod() {
+  const file = document.getElementById('modUpload').files[0];
+  if (!file) return toast('Choose a ZIP package first', 'error');
+  if (!confirm('Stage this upload for inspection?')) return;
+  const form = new FormData();
+  form.append('file', file);
+  toast('Uploading...', 'info');
+  api('/api/mods/upload', { method: 'POST', body: form })
+    .then(d => d.requires_confirmation && confirm(d.message + ' Continue?') ? api('/api/mods/upload', { method: 'POST', headers: { 'X-Maintenance-Confirmation': d.confirmation_token }, body: form }) : d)
+    .then(d => {
+      if (!d.success) return toast(d.message || 'Upload failed', 'error');
+      window.modStaging = d.staged.staging_dir;
+      const s = document.getElementById('modStagingSelect');
+      if (s) s.innerHTML = '<option value="' + window.modStaging + '">' + window.modStaging + '</option>';
+      showModResult(JSON.stringify(d.staged, null, 2));
+      toast('Package staged successfully', 'success');
+      setModStep('inspect');
+      refreshModOperations();
+    });
+}
+
+function inspectStaged() {
+  const path = document.getElementById('modStagingSelect').value;
+  if (!path) return toast('Upload a package first', 'error');
+  toast('Inspecting...', 'info');
+  api('/api/mods/inspect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staging_dir: path }) })
+    .then(d => { showModResult(JSON.stringify(d, null, 2)); setModStep('review'); });
+}
+
+function previewStaged() {
+  const path = document.getElementById('modStagingSelect').value;
+  const id = decodeURIComponent(document.getElementById('modCatalogSelect').value);
+  const target = document.getElementById('modTargetSelect').value;
+  if (!path || !id) return toast('Select staged package and catalog mod', 'error');
+  toast('Generating preview...', 'info');
+  api('/api/mods/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staging_dir: path, mod_id: id, target_root: '__PALWORLD_DIR__', target: target }) })
+    .then(d => { if (d.success) window.modPlan = d.result; showModResult(JSON.stringify(d, null, 2)); setModStep('apply'); });
+}
+
+function applyModPlan() {
+  const plan = window.modPlan, path = document.getElementById('modStagingSelect').value;
+  if (!plan || !path) return toast('Preview a plan before applying', 'error');
+  const payload = { plan: plan, staging_dir: path };
+  const send = body => api('/api/mods/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  send(payload).then(d => d.requires_confirmation && confirm(d.message || 'Confirm applying this mod plan?') ? send({ ...payload, maintenance_confirmation: d.confirmation_token }) : d)
+    .then(d => { toast(d.message || JSON.stringify(d.result || d), d.success ? 'success' : 'error'); refreshMods(); refreshModOperations(); })
+    .catch(e => toast('Apply failed: ' + e.message, 'error'));
+}
+
+function createModBackup() {
+  toast('Creating backup...', 'info');
+  api('/api/mods/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(d => d.requires_confirmation && confirm('Create backup?') ? api('/api/mods/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maintenance_confirmation: d.confirmation_token }) }) : d)
+    .then(d => { toast(d.message || 'Backup created', d.success ? 'success' : 'error'); refreshModOperations(); });
+}
+
+function rollbackMod() {
+  const backup = decodeURIComponent(document.getElementById('modBackupSelect').value);
+  if (!backup) return toast('Select a backup first', 'error');
+  const payload = { backup_path: backup };
+  const send = body => api('/api/mods/rollback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  send(payload).then(d => d.requires_confirmation && confirm(d.message || 'Confirm rollback?') ? send({ ...payload, maintenance_confirmation: d.confirmation_token }) : d)
+    .then(d => { toast(d.message || 'Rollback requested', d.success ? 'success' : 'error'); refreshModOperations(); })
+    .catch(e => toast('Rollback failed: ' + e.message, 'error'));
+}
 // ─── Refresh all ───
 function refreshAll() { refreshStats(); }
 
