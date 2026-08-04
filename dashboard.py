@@ -532,12 +532,10 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* Main */
-.main{margin-left:260px;flex:1;padding:28px 32px;min-height:100vh}
-.main{width:calc(100% - 260px);max-width:none;overflow:hidden}
+.main{margin-left:260px;width:calc(100% - 260px);flex:1;padding:28px 32px;min-height:100vh;overflow:hidden}
 .page{min-width:0}.card,.stat-card{min-width:0;overflow:hidden}.page-header>*{min-width:0}
 .stats-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}.grid-2,.grid-3{grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))}
 .workflow{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.mod-toolbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}.mod-toolbar button{min-height:40px}.mod-toolbar label{min-width:0}
-.main{max-width:1480px}
 .status-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;margin-bottom:24px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--radius)}
 .status-banner.offline{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2)}
 .status-banner-copy{display:flex;align-items:center;gap:12px}.status-banner-title{font-size:15px;font-weight:600}.status-banner-detail{font-size:12px;color:var(--text-secondary);margin-top:3px}
