@@ -65,7 +65,7 @@ class ModManagerTests(unittest.TestCase):
             plan = mod_manager.preview_plan(staged["staging_dir"], root / "server", "approved", catalog=catalog)
             manifest = root / "manifest.json"
             record = mod_manager.apply_plan(plan, staged["staging_dir"], manifest)
-            owned = root / "server" / "Mods/example.pak"
+            owned = root / "server" / "Pal" / "Content" / "Paks" / "~mods" / "Mods" / "example.pak"
             self.assertTrue(owned.exists())
             self.assertIn(str(owned.resolve()), record["owned_files"])
             (root / "server" / "keep.txt").write_text("keep")

@@ -363,7 +363,7 @@ def preview_plan(staging_dir: os.PathLike[str] | str, target_root: os.PathLike[s
         raise ModManagerError("target must be server or client")
     if not isinstance(mod_id, str) or not mod_id.strip():
         raise ModManagerError("mod_id is required")
-    root = Path(target_root).expanduser().resolve()
+    root = (Path(target_root).expanduser().resolve() / "Pal" / "Content" / "Paks" / "~mods").resolve() if target == "server" else Path(target_root).expanduser().resolve()
     package = inspect_packages(staging_dir)
     if not package.get("supported") or package.get("unsupported"):
         raise ModManagerError("package contains unsupported or unrecognized files")

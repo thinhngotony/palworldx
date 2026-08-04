@@ -346,6 +346,12 @@ def _confined_path(raw, root, label):
 
 def _manifest_path():
     return _mod_root() / 'manifest.json'
+def get_installed_mods():
+    """Return manifest-backed uploaded mods for the dashboard."""
+    if mod_manager is None:
+        return []
+    manifest = mod_manager.read_manifest(_manifest_path())
+    return [{"id": mod_id, **record} for mod_id, record in manifest.get("mods", {}).items()]
 
 
 def _backup_root():
@@ -1070,9 +1076,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <div id="modFeedback" class="mod-feedback" role="status" aria-live="polite"></div>
 </div>
 
-<!-- Uploaded package tracking -->
+<!-- Installed package tracking -->
 <div>
-<div class="card" style="padding:16px"><div class="card-header"><span class="card-title">Uploaded package tracking</span></div><p class="mod-drop-hint">Packages are reviewed from their uploaded contents. No catalog approval is required.</p><div id="modResultBox" class="mod-result-box" style="display:none;margin-top:12px"></div></div>
+<div class="card" style="padding:16px"><div class="card-header"><span class="card-title">Installed mods</span><button class="btn-refresh" onclick="refreshInstalledMods()">Refresh</button></div><div id="installedMods"><p class="mod-drop-hint">Loading installed packages...</p></div><div id="modResultBox" class="mod-result-box" style="display:none;margin-top:12px"></div></div>
 <div id="modOperations" style="margin-top:16px"></div>
 </div>
 </div>
@@ -1383,8 +1389,20 @@ function showModResult(text) {
   box.textContent = text;
 }
 
+function refreshInstalledMods() {
+  api('/api/installed-mods').then(d => {
+    const el = document.getElementById('installedMods'), mods = d.mods || [];
+    if (!mods.length) { el.innerHTML = '<p class="mod-drop-hint">No uploaded mods are installed.</p>'; return; }
+    el.innerHTML = mods.map(m => '<div class="info-row"><span><strong>' + m.id + '</strong><br><small>' + (m.target || 'server') + ' · ' + (m.owned_files || []).length + ' file(s)</small></span><span class="mod-actions"><span class="mod-tag ' + (m.enabled ? 'verified' : 'unverified') + '">' + (m.enabled ? 'Enabled' : 'Disabled') + '</span><button class="btn-secondary" onclick="setUploadedModState(\'' + encodeURIComponent(m.id) + '\',\'disable\')">Disable</button><button class="btn-danger" onclick="setUploadedModState(\'' + encodeURIComponent(m.id) + '\',\'remove\')">Uninstall</button></span></div>').join('');
+  }).catch(e => { document.getElementById('installedMods').textContent = 'Installed mods unavailable: ' + e.message; });
+}
+function setUploadedModState(encoded, action) {
+  const id = decodeURIComponent(encoded); if (!confirm(action === 'remove' ? 'Uninstall ' + id + '?' : 'Disable ' + id + '?')) return;
+  api('/api/mods/' + encodeURIComponent(id) + '/' + action, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}).then(d => d.requires_confirmation ? api('/api/mods/' + encodeURIComponent(id) + '/' + action, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}) : d).then(d => { toast(d.message || (d.success ? 'Mod updated' : 'Mod update failed'), d.success ? 'success' : 'error'); if (d.success) refreshInstalledMods(); });
+}
 function refreshMods() {
   refreshModOperations();
+  refreshInstalledMods();
   const result = document.getElementById('modResultBox');
   if (result && !result.textContent) result.textContent = 'Upload a package to begin. The uploaded contents determine the review and install plan.';
   if (result) result.style.display = 'block';
@@ -1605,6 +1623,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif path == '/api/network':
             self.send_json({'network': get_network_info()})
 
+        elif path == '/api/installed-mods':
+            self.send_json({'available': mod_manager is not None, 'mods': get_installed_mods()})
         elif path == '/api/mods':
             self.send_json({'available': mod_manager is not None, 'mods': get_mods()})
 
@@ -1747,7 +1767,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if is_server_running():
                     run_as_steam(f'screen -S {shlex.quote(SCREEN_NAME)} -X quit')
                     time.sleep(3)
-                # Start
                 run_as_steam(
                     f'cd {shlex.quote(PALWORLD_DIR)} && screen -dmS {shlex.quote(SCREEN_NAME)} ./PalServer.sh',
                     timeout_sec=15,
