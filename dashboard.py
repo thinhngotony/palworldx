@@ -1775,7 +1775,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 token = secrets.token_urlsafe(24); maintenance_confirmations[token] = time.time()
                 self.send_json({'success': False, 'requires_confirmation': True, 'confirmation_token': token}, 409); return
             try:
-                result = create_mod_backup(_manifest_path(), _backup_root(), data.get('label', 'manifest'))
+                manifest = _manifest_path()
+                if not manifest.exists():
+                    _call_backend(("write_manifest",), manifest, {"mods": {}})
+                result = create_mod_backup(manifest, _backup_root(), data.get('label', 'manifest'))
                 self.send_json({'success': True, 'result': result})
             except Exception as error:
                 self.send_json({'success': False, 'message': str(error)}, 400)
