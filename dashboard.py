@@ -540,6 +540,8 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 .workflow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px}.workflow-step{padding:11px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:rgba(255,255,255,.025);font-size:12px;color:var(--text-muted)}.workflow-step strong{display:block;color:var(--text-secondary);font-size:11px;margin-bottom:4px}.workflow-step.active{border-color:rgba(88,80,236,.45);background:rgba(88,80,236,.1);color:var(--text-primary)}
 .mod-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:16px}.mod-toolbar label{flex:1 1 180px}.mod-toolbar input,.mod-toolbar select{display:block;width:100%;margin-top:6px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text-primary);font:inherit}.mod-toolbar label{font-size:11px;color:var(--text-muted);font-weight:600}.mod-feedback{min-height:20px;margin:10px 0;color:var(--text-secondary);font-size:12px}.mod-feedback.error{color:#fca5a5}.mod-feedback.success{color:#6ee7b7}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent-light);outline-offset:2px}
+.catalog-toolbar{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px}.catalog-toolbar label{font-size:11px;color:var(--text-muted);font-weight:600}.catalog-toolbar input,.catalog-toolbar select{display:block;width:100%;margin-top:6px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text-primary);font:inherit}.mod-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.05)}.mod-row:last-child{border-bottom:0}.mod-name{font-weight:600;font-size:13px}.mod-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.mod-badge{font-size:10px;padding:3px 7px;border-radius:5px;background:rgba(255,255,255,.06);color:var(--text-secondary)}.mod-badge.good{color:#6ee7b7;background:rgba(16,185,129,.1)}.mod-badge.warn{color:#fcd34d;background:rgba(245,158,11,.1)}.mod-badge.bad{color:#fca5a5;background:rgba(239,68,68,.1)}.mod-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.mod-detail{padding:14px;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:rgba(255,255,255,.025);color:var(--text-secondary);font-size:12px;line-height:1.6}.mod-detail strong{color:var(--text-primary)}
+@media(max-width:700px){.catalog-toolbar{grid-template-columns:1fr}.mod-row{grid-template-columns:1fr}.mod-actions{justify-content:flex-start}}
 @media(max-width:700px){.status-banner{align-items:flex-start;flex-direction:column}.workflow{grid-template-columns:repeat(2,1fr)}}
 
 /* Mobile menu button */
@@ -937,7 +939,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <div id="modFeedback" class="mod-feedback" role="status" aria-live="polite"></div><div id="modPreview" style="margin-top:16px;white-space:pre-wrap"></div><div id="modOperations" style="margin-top:16px"></div>
 <p style="color:var(--text-muted);font-size:12px;margin-top:16px">Stage and review packages while the server stays online. Applying changes requires a fresh maintenance confirmation.</p>
 </div>
-<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Catalog and installed state</span></div><div id="modList"><p style="color:var(--text-muted);font-size:13px">Loading catalog...</p></div></div>
+<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Catalog and installed state</span></div><div class="catalog-toolbar"><label>Search mods<input id="modSearch" type="search" placeholder="Search by name or ID" oninput="renderModCatalog()"></label><label>Filter<select id="modFilter" onchange="renderModCatalog()"><option value="all">All mods</option><option value="server">Server eligible</option><option value="client">Client only</option><option value="blocked">Blocked or unverified</option></select></label></div><div id="modDetail" class="mod-detail" hidden></div><div id="modList"><p style="color:var(--text-muted);font-size:13px">Loading catalog...</p></div></div>
 </div>
 
 <!-- ═══ SYSTEM PAGE ═══ -->
@@ -1208,11 +1210,34 @@ function refreshBackups() {
 
 function refreshMods() {
   api('/api/mods').then(data => {
-    const el=document.getElementById('modList'), mods=data.mods||[]; el.innerHTML='';
-    if(!mods.length){el.textContent=data.available===false?'Mod backend is unavailable.':'No catalog mods found.';return;}
-    mods.forEach(mod=>{const row=document.createElement('div');row.className='info-row';const label=document.createElement('span');label.className='info-label';label.textContent=(mod.name||mod.id)+' · '+(mod.scope||'unknown')+' · '+(mod.verification_state||mod.status||'unknown');row.appendChild(label);['Instructions','Enable','Disable','Remove'].forEach((text,i)=>{const b=document.createElement('button');b.className='btn-refresh';b.textContent=text;b.onclick=()=>i?modAction(mod.id,text.toLowerCase()):showInstructions(mod.id);row.appendChild(b);});el.appendChild(row);});
-    const catalog=document.getElementById('modCatalogSelect'); catalog.innerHTML='<option value="">Select a catalog mod</option>'+mods.map(m=>'<option value="'+encodeURIComponent(m.id)+'">'+(m.name||m.id)+'</option>').join('');
-  }).catch(e=>{document.getElementById('modList').textContent='Mods unavailable: '+e.message;});
+    modCatalog = data.mods || [];
+    const catalog = document.getElementById('modCatalogSelect');
+    catalog.innerHTML = '<option value="">Select a catalog mod</option>' + modCatalog.map(m => '<option value="' + encodeURIComponent(m.id) + '">' + (m.name || m.id) + '</option>').join('');
+    renderModCatalog();
+  }).catch(e => { document.getElementById('modList').textContent = 'Mods unavailable: ' + e.message; });
+}
+function renderModCatalog() {
+  const query = (document.getElementById('modSearch')?.value || '').toLowerCase();
+  const filter = document.getElementById('modFilter')?.value || 'all';
+  const visible = modCatalog.filter(m => {
+    const text = ((m.name || '') + ' ' + (m.id || '')).toLowerCase();
+    const allowed = m.server_install_allowed === true;
+    const client = m.scope === 'client';
+    const blocked = !allowed || m.verification_state === 'unknown' || m.verification_state === 'unverified';
+    return (!query || text.includes(query)) && (filter === 'all' || (filter === 'server' && allowed) || (filter === 'client' && client) || (filter === 'blocked' && blocked));
+  });
+  const el = document.getElementById('modList');
+  if (!visible.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:12px 0">No matching mods. Try another search or filter.</p>'; return; }
+  el.innerHTML = visible.map(m => {
+    const safe = m.server_install_allowed === true, state = m.verification_state || 'unknown';
+    return '<div class="mod-row"><div><div class="mod-name">' + (m.name || m.id) + '</div><div class="mod-meta"><span class="mod-badge">' + (m.scope || 'unknown') + '</span><span class="mod-badge ' + (safe ? 'good' : 'bad') + '">' + (safe ? 'Server eligible' : 'Install blocked') + '</span><span class="mod-badge ' + (state === 'verified' ? 'good' : 'warn') + '">' + state + '</span></div></div><div class="mod-actions"><button class="btn-refresh" onclick="showModDetail(\'' + encodeURIComponent(m.id) + '\')">Details</button>' + (safe ? '<button class="btn-refresh" onclick="modAction(\'' + encodeURIComponent(m.id) + '\',\'enable\')">Enable</button>' : '') + '</div></div>';
+  }).join('');
+}
+function showModDetail(encoded) {
+  const m = modCatalog.find(x => x.id === decodeURIComponent(encoded)), el = document.getElementById('modDetail');
+  if (!m || !el) return;
+  el.hidden = false;
+  el.innerHTML = '<strong>' + m.name + '</strong><br>Scope: ' + (m.scope || 'unknown') + ' · Verification: ' + (m.verification_state || 'unknown') + '<br>' + (m.server_install_gate || m.client_instructions || m.notes || 'Review the release documentation before making changes.') + '<br><button class="btn-refresh" onclick="showInstructions(\'' + encoded + '\')">View instructions</button>';
 }
 function refreshModOperations(){api('/api/operations').then(d=>{document.getElementById('modOperations').textContent=JSON.stringify(d.operations||[],null,2);});api('/api/mod-backups').then(d=>{const s=document.getElementById('modBackupSelect');s.innerHTML='<option value="">Select a backup</option>'+(d.backups||[]).map(b=>'<option value="'+encodeURIComponent(b.path||b.name||'')+'">'+(b.name||b.path||'backup')+'</option>').join('');});}
 function modAction(id,action){if(!confirm('Confirm mod '+action+'?'))return;api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(d=>d.requires_confirmation&&confirm(d.message+' Continue?')?api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}):d).then(d=>d.success?(toast('Mod '+action+' complete','success'),refreshMods(),refreshModOperations()):toast(d.message||'Mod action failed','error'));}
