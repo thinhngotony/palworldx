@@ -1014,45 +1014,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <div class="card" style="padding:16px">
 <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Workflow</div>
 <div class="mod-stepper">
-<div class="mod-step active" data-step="stage" onclick="setModStep('stage')">
-<div class="mod-step-num">1</div>
-<div class="mod-step-text">
-<div class="mod-step-title">Stage</div>
-<div class="mod-step-desc">Upload a ZIP package for inspection</div>
-</div>
-</div>
+<div class="mod-step active" data-step="stage" onclick="setModStep('stage')"><div class="mod-step-num">1</div><div class="mod-step-text"><div class="mod-step-title">Stage</div><div class="mod-step-desc">Upload a ZIP package for inspection</div></div></div>
 <div class="mod-step-connector"></div>
-<div class="mod-step" data-step="inspect" onclick="setModStep('inspect')">
-<div class="mod-step-num">2</div>
-<div class="mod-step-text">
-<div class="mod-step-title">Inspect</div>
-<div class="mod-step-desc">Verify package contents and structure</div>
-</div>
-</div>
+<div class="mod-step" data-step="inspect" onclick="setModStep('inspect')"><div class="mod-step-num">2</div><div class="mod-step-text"><div class="mod-step-title">Inspect</div><div class="mod-step-desc">Check package contents and safety</div></div></div>
 <div class="mod-step-connector"></div>
-<div class="mod-step" data-step="review" onclick="setModStep('review')">
-<div class="mod-step-num">3</div>
-<div class="mod-step-text">
-<div class="mod-step-title">Review</div>
-<div class="mod-step-desc">Preview file changes before applying</div>
-</div>
-</div>
+<div class="mod-step" data-step="review" onclick="setModStep('review')"><div class="mod-step-num">3</div><div class="mod-step-text"><div class="mod-step-title">Review</div><div class="mod-step-desc">Choose the mod and preview changes</div></div></div>
 <div class="mod-step-connector"></div>
-<div class="mod-step" data-step="apply" onclick="setModStep('apply')">
-<div class="mod-step-num">4</div>
-<div class="mod-step-text">
-<div class="mod-step-title">Apply</div>
-<div class="mod-step-desc">Confirm maintenance and deploy</div>
-</div>
-</div>
+<div class="mod-step" data-step="backup" onclick="setModStep('backup')"><div class="mod-step-num">4</div><div class="mod-step-text"><div class="mod-step-title">Backup</div><div class="mod-step-desc">Save current state before applying</div></div></div>
 <div class="mod-step-connector"></div>
-<div class="mod-step" data-step="backup" onclick="setModStep('backup')">
-<div class="mod-step-num">5</div>
-<div class="mod-step-text">
-<div class="mod-step-title">Backup</div>
-<div class="mod-step-desc">Save current state for rollback</div>
-</div>
-</div>
+<div class="mod-step" data-step="apply" onclick="setModStep('apply')"><div class="mod-step-num">5</div><div class="mod-step-text"><div class="mod-step-title">Apply</div><div class="mod-step-desc">Confirm maintenance and deploy</div></div></div>
 </div>
 
 <!-- Step Panels -->
@@ -1406,14 +1376,16 @@ function refreshBackups() {
 
 // ─── Mod Tab State ───
 let modCurrentStep = 'stage';
-const modStepOrder = ['stage','inspect','review','apply','backup'];
+const modStepOrder = ['stage','inspect','review','backup','apply'];
 
-function setModStep(step) {
+function setModStep(step, advance=false) {
+  const next = modStepOrder.indexOf(step), current = modStepOrder.indexOf(modCurrentStep);
+  if (next > current && !advance) return toast('Complete the current step first', 'info');
   modCurrentStep = step;
   document.querySelectorAll('.mod-step').forEach(el => {
     const s = el.dataset.step;
     el.classList.toggle('active', s === step);
-    el.classList.toggle('done', modStepOrder.indexOf(s) < modStepOrder.indexOf(step));
+    el.classList.toggle('done', modStepOrder.indexOf(s) < next);
   });
   document.querySelectorAll('.mod-panel').forEach(p => p.classList.remove('active'));
   const panel = document.getElementById('modPanel' + step.charAt(0).toUpperCase() + step.slice(1));
@@ -1572,18 +1544,18 @@ function uploadMod() {
       if (s) s.innerHTML = '<option value="' + window.modStaging + '">' + window.modStaging + '</option>';
       showModResult(JSON.stringify(d.staged, null, 2));
       toast('Package staged successfully', 'success');
-      setModStep('inspect');
+      setModStep('inspect', true);
       refreshModOperations();
     });
 }
-
 function inspectStaged() {
   const path = document.getElementById('modStagingSelect').value;
   if (!path) return toast('Upload a package first', 'error');
   toast('Inspecting...', 'info');
   api('/api/mods/inspect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staging_dir: path }) })
-    .then(d => { showModResult(JSON.stringify(d, null, 2)); setModStep('review'); });
+    .then(d => { if (!d.success) return toast(d.message || 'Inspection failed', 'error'); showModResult(JSON.stringify(d, null, 2)); setModStep('review', true); });
 }
+
 
 function previewStaged() {
   const path = document.getElementById('modStagingSelect').value;
@@ -1592,16 +1564,16 @@ function previewStaged() {
   if (!path || !id) return toast('Select staged package and catalog mod', 'error');
   toast('Generating preview...', 'info');
   api('/api/mods/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staging_dir: path, mod_id: id, target_root: '__PALWORLD_DIR__', target: target }) })
-    .then(d => { if (d.success) window.modPlan = d.result; showModResult(JSON.stringify(d, null, 2)); setModStep('apply'); });
+    .then(d => { if (!d.success) return toast(d.message || 'Preview failed', 'error'); window.modPlan = d.result; showModResult(JSON.stringify(d, null, 2)); setModStep('backup', true); });
 }
 
 function applyModPlan() {
   const plan = window.modPlan, path = document.getElementById('modStagingSelect').value;
-  if (!plan || !path) return toast('Preview a plan before applying', 'error');
+  if (!plan || !path) return toast('Review changes before applying', 'error');
   const payload = { plan: plan, staging_dir: path };
   const send = body => api('/api/mods/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   send(payload).then(d => d.requires_confirmation && confirm(d.message || 'Confirm applying this mod plan?') ? send({ ...payload, maintenance_confirmation: d.confirmation_token }) : d)
-    .then(d => { toast(d.message || JSON.stringify(d.result || d), d.success ? 'success' : 'error'); refreshMods(); refreshModOperations(); })
+    .then(d => { toast(d.message || JSON.stringify(d.result || d), d.success ? 'success' : 'error'); if (d.success) { setModStep('apply', true); refreshMods(); refreshModOperations(); } })
     .catch(e => toast('Apply failed: ' + e.message, 'error'));
 }
 
@@ -1609,7 +1581,7 @@ function createModBackup() {
   toast('Creating backup...', 'info');
   api('/api/mods/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
     .then(d => d.requires_confirmation && confirm('Create backup?') ? api('/api/mods/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maintenance_confirmation: d.confirmation_token }) }) : d)
-    .then(d => { toast(d.message || 'Backup created', d.success ? 'success' : 'error'); refreshModOperations(); });
+    .then(d => { toast(d.message || 'Backup created', d.success ? 'success' : 'error'); if (d.success) setModStep('apply', true); refreshModOperations(); });
 }
 
 function rollbackMod() {
