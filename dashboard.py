@@ -490,6 +490,7 @@ DASHBOARD_HTML = r'''<!DOCTYPE html>
 <title>Palworld Server Dashboard</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
+html{overflow-x:hidden}
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 :root{
 --bg-primary:#0f0f1a;--bg-card:rgba(22,22,40,0.85);--bg-card-hover:rgba(30,30,52,0.9);
@@ -532,6 +533,10 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 
 /* Main */
 .main{margin-left:260px;flex:1;padding:28px 32px;min-height:100vh}
+.main{width:calc(100% - 260px);max-width:none;overflow:hidden}
+.page{min-width:0}.card,.stat-card{min-width:0;overflow:hidden}.page-header>*{min-width:0}
+.stats-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}.grid-2,.grid-3{grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))}
+.workflow{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.mod-toolbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}.mod-toolbar button{min-height:40px}.mod-toolbar label{min-width:0}
 .main{max-width:1480px}
 .status-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;margin-bottom:24px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--radius)}
 .status-banner.offline{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2)}
@@ -653,19 +658,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 /* Responsive */
 @media(max-width:1200px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){
-.sidebar{transform:translateX(-100%)}
-.sidebar.open{transform:translateX(0)}
-.sidebar-overlay.show{display:block}
-.mobile-menu-btn{display:flex}
-.main{margin-left:0;padding:20px 16px;padding-top:64px}
-.stats-grid{grid-template-columns:1fr 1fr}
-.grid-2,.grid-3{grid-template-columns:1fr}
-.page-title{font-size:20px}
+.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.sidebar-overlay.show{display:block}.mobile-menu-btn{display:flex}
+.main{width:100%;margin-left:0;padding:64px 16px 24px}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-2,.grid-3{grid-template-columns:1fr}.page-title{font-size:20px}.card{padding:18px}
 }
-@media(max-width:500px){
-.stats-grid{grid-template-columns:1fr}
-.controls-grid{grid-template-columns:1fr}
-}
+@media(max-width:520px){.stats-grid{grid-template-columns:1fr}.controls-grid{grid-template-columns:1fr}.page-header{margin-bottom:18px}.page-subtitle{max-width:38ch}.workflow{grid-template-columns:repeat(2,minmax(0,1fr))}.workflow-step{min-height:68px}.mod-toolbar{grid-template-columns:1fr}.mod-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.mod-actions button{width:100%}.toast-container{left:12px;right:12px;top:12px}.toast{min-width:0;width:100%}}
 
 /* Scrollbar */
 ::-webkit-scrollbar{width:6px;height:6px}
