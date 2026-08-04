@@ -532,6 +532,15 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 
 /* Main */
 .main{margin-left:260px;flex:1;padding:28px 32px;min-height:100vh}
+.main{max-width:1480px}
+.status-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;margin-bottom:24px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--radius)}
+.status-banner.offline{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2)}
+.status-banner-copy{display:flex;align-items:center;gap:12px}.status-banner-title{font-size:15px;font-weight:600}.status-banner-detail{font-size:12px;color:var(--text-secondary);margin-top:3px}
+.status-banner .status-dot{width:10px;height:10px}.status-banner-action{font-size:12px;color:var(--text-secondary);white-space:nowrap}
+.workflow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px}.workflow-step{padding:11px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:rgba(255,255,255,.025);font-size:12px;color:var(--text-muted)}.workflow-step strong{display:block;color:var(--text-secondary);font-size:11px;margin-bottom:4px}.workflow-step.active{border-color:rgba(88,80,236,.45);background:rgba(88,80,236,.1);color:var(--text-primary)}
+.mod-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:16px}.mod-toolbar label{flex:1 1 180px}.mod-toolbar input,.mod-toolbar select{display:block;width:100%;margin-top:6px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text-primary);font:inherit}.mod-toolbar label{font-size:11px;color:var(--text-muted);font-weight:600}.mod-feedback{min-height:20px;margin:10px 0;color:var(--text-secondary);font-size:12px}.mod-feedback.error{color:#fca5a5}.mod-feedback.success{color:#6ee7b7}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent-light);outline-offset:2px}
+@media(max-width:700px){.status-banner{align-items:flex-start;flex-direction:column}.workflow{grid-template-columns:repeat(2,1fr)}}
 
 /* Mobile menu button */
 .mobile-menu-btn{display:none;position:fixed;top:16px;left:16px;z-index:200;width:40px;height:40px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-xs);cursor:pointer;align-items:center;justify-content:center;font-size:20px;color:var(--text-primary)}
@@ -751,6 +760,10 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 <!-- ═══ DASHBOARD PAGE ═══ -->
 <div class="page active" id="page-dashboard">
 <div class="page-header">
+<div class="status-banner" id="statusBanner" role="status" aria-live="polite">
+<div class="status-banner-copy"><span class="status-dot online" id="statusBannerDot"></span><div><div class="status-banner-title" id="statusBannerTitle">Checking server status</div><div class="status-banner-detail" id="statusBannerDetail">Connecting to the local server monitor</div></div></div>
+<span class="status-banner-action">Updates automatically</span>
+</div>
 <div>
 <div class="page-title">Dashboard</div>
 <div class="page-subtitle">Real-time server monitoring</div>
@@ -909,48 +922,22 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 
 <!-- ═══ BACKUPS PAGE ═══ -->
 <div class="page" id="page-backups">
-<div class="page-header">
-<div>
-<div class="page-title">Save Data</div>
-<div class="page-subtitle">Server save files</div>
-</div>
-<div class="header-actions">
-<button class="btn-refresh" onclick="refreshBackups()">&#x21bb; Refresh</button>
-</div>
-</div>
-<div class="card">
-<div class="card-header"><span class="card-title">Save Files</span></div>
-<div id="backupList"><p style="color:var(--text-muted);font-size:13px">Loading...</p></div>
-</div>
+<div class="page-header"><div><div class="page-title">Save Data</div><div class="page-subtitle">Server save files</div></div><div class="header-actions"><button class="btn-refresh" onclick="refreshBackups()">&#x21bb; Refresh</button></div></div>
+<div class="card"><div class="card-header"><span class="card-title">Save Files</span></div><div id="backupList"><p style="color:var(--text-muted);font-size:13px">Loading...</p></div></div>
 </div>
 
 <!-- ═══ MODS PAGE ═══ -->
 <div class="page" id="page-mods">
-<div class="page-header">
-<div><div class="page-title">Mods</div><div class="page-subtitle">Authenticated mod manager integration</div></div>
-<div class="header-actions"><button class="btn-refresh" onclick="refreshMods()">&#x21bb; Refresh</button></div>
+<div class="page-header"><div><div class="page-title">Mods</div><div class="page-subtitle">Stage, review, and safely configure server mods</div></div><div class="header-actions"><button class="btn-refresh" onclick="refreshMods()">&#x21bb; Refresh</button></div></div>
+<div class="card">
+<div class="card-header"><span class="card-title">Package workflow</span><button class="btn-refresh" onclick="refreshModOperations()">Refresh activity</button></div>
+<div class="workflow" aria-label="Mod package workflow"><div class="workflow-step active"><strong>1 · Stage</strong>Upload a ZIP package</div><div class="workflow-step"><strong>2 · Inspect</strong>Check package contents</div><div class="workflow-step"><strong>3 · Review</strong>Preview file changes</div><div class="workflow-step"><strong>4 · Backup</strong>Save current state</div><div class="workflow-step"><strong>5 · Apply</strong>Confirm the maintenance change</div><div class="workflow-step"><strong>6 · Restore</strong>Rollback if needed</div></div>
+<div class="mod-toolbar"><label>Package to stage<input id="modUpload" type="file" accept=".zip"></label><button class="btn-save" onclick="uploadMod()">Stage package · Upload for inspection</button><label>Staged package<select id="modStagingSelect"><option value="">Upload a package first</option></select></label><label>Catalog mod<select id="modCatalogSelect"><option value="">Select a catalog mod</option></select></label><label>Target<select id="modTargetSelect"><option value="server">Server</option><option value="client">Client</option></select></label></div>
+<div class="mod-toolbar"><button class="btn-refresh" onclick="inspectStaged()">Inspect package</button><button class="btn-refresh" onclick="previewStaged()">Review changes</button><button class="btn-save" onclick="applyModPlan()">Apply changes</button><button class="btn-refresh" onclick="createModBackup()">Create backup</button><label>Restore backup<select id="modBackupSelect"><option value="">No backups available</option></select></label><button class="btn-refresh" onclick="rollbackMod()">Restore selected</button></div>
+<div id="modFeedback" class="mod-feedback" role="status" aria-live="polite"></div><div id="modPreview" style="margin-top:16px;white-space:pre-wrap"></div><div id="modOperations" style="margin-top:16px"></div>
+<p style="color:var(--text-muted);font-size:12px;margin-top:16px">Stage and review packages while the server stays online. Applying changes requires a fresh maintenance confirmation.</p>
 </div>
-<div class="card-header"><span class="card-title">Mod packages</span><button class="btn-refresh" onclick="refreshModOperations()">Operations</button></div>
-<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
-<input id="modUpload" type="file" accept=".zip" style="color:var(--text-secondary);font-size:13px">
-<button class="btn-save" onclick="uploadMod()">Upload for inspection</button>
-<button class="btn-refresh" onclick="inspectStaged()">Inspect staged</button>
-<button class="btn-refresh" onclick="previewStaged()">Preview plan</button>
-<button class="btn-save" onclick="applyModPlan()">Apply plan</button>
-<button class="btn-refresh" onclick="createModBackup()">Create backup</button>
-<button class="btn-refresh" onclick="rollbackMod()">Rollback backup</button>
-</div>
-<div class="controls-grid" style="margin-bottom:16px">
-<label>Staged package<select id="modStagingSelect"><option value="">Upload a package first</option></select></label>
-<label>Catalog mod<select id="modCatalogSelect"><option value="">Select a catalog mod</option></select></label>
-<label>Target<select id="modTargetSelect"><option value="server">Server</option><option value="client">Client</option></select></label>
-<label>Backup<select id="modBackupSelect"><option value="">No backups available</option></select></label>
-</div>
-<div id="modList"><p style="color:var(--text-muted);font-size:13px">Loading...</p></div>
-<div id="modPreview" style="margin-top:16px;white-space:pre-wrap"></div>
-<div id="modOperations" style="margin-top:16px"></div>
-<p style="color:var(--text-muted);font-size:12px;margin-top:16px">Uploads are staged and inspected before applying. Every upload or apply requires a fresh maintenance confirmation; the dashboard never interrupts the server without confirmation.</p>
-</div>
+<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Catalog and installed state</span></div><div id="modList"><p style="color:var(--text-muted);font-size:13px">Loading catalog...</p></div></div>
 </div>
 
 <!-- ═══ SYSTEM PAGE ═══ -->
@@ -1011,7 +998,6 @@ function showPage(id, el) {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebarOverlay').classList.remove('show');
 }
-
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebarOverlay').classList.toggle('show');
@@ -1022,9 +1008,9 @@ function toast(msg, type='info') {
   const c = document.getElementById('toasts');
   const t = document.createElement('div');
   const icons = {success:'&#10003;', error:'&#10007;', info:'&#8505;'};
-  t.className = 'toast '+type;
-  t.innerHTML = '<span>'+icons[type]+'</span> '+msg;
-  c.appendChild(t);
+  t.className = 'toast '+type; t.setAttribute('role','alert');
+  t.innerHTML = '<span>'+icons[type]+'</span> '+msg; c.appendChild(t);
+  const feedback=document.getElementById('modFeedback'); if(feedback){feedback.textContent=msg;feedback.className='mod-feedback '+type;}
   setTimeout(() => { t.style.animation='slideOut .3s ease forwards'; setTimeout(()=>t.remove(),300); }, 4000);
 }
 
@@ -1033,8 +1019,7 @@ function updateClock() {
   const now = new Date();
   document.getElementById('clockDisplay').textContent = now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
-setInterval(updateClock, 1000);
-updateClock();
+setInterval(updateClock, 1000); updateClock();
 
 // ─── Fetch helpers ───
 function api(url, opts) {
@@ -1069,6 +1054,10 @@ function refreshStats() {
     document.getElementById('statPlayers').textContent = s.players;
     document.getElementById('detailSize').textContent = s.size;
     document.getElementById('detailPID').textContent = s.pid || '--';
+    const banner=document.getElementById('statusBanner'), bannerDot=document.getElementById('statusBannerDot');
+    banner.className='status-banner '+(s.running?'':'offline'); bannerDot.className='status-dot '+(s.running?'online pulse':'offline');
+    document.getElementById('statusBannerTitle').textContent=s.running?'Server is online':'Server is offline';
+    document.getElementById('statusBannerDetail').textContent=s.running?'Accepting connections · Uptime '+s.uptime:'Start the server when you are ready';
 
     // Controls page
     document.getElementById('ctrlStatus').textContent = s.running ? 'Running' : 'Stopped';
