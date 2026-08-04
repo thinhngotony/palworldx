@@ -40,6 +40,12 @@ jobs:
         uses: webfactory/ssh-agent@v0.9.1
         with:
           ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+      - name: Trust production host key
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_PORT: ${{ secrets.PRODUCTION_PORT }}
+        run: |
+          ssh-keyscan -p "$PRODUCTION_PORT" -H "$PRODUCTION_HOST" >> "$HOME/.ssh/known_hosts"
 
       - name: Deploy dashboard files
         env:
