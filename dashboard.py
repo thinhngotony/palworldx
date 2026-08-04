@@ -1045,17 +1045,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 </div>
 
 <div class="mod-panel" id="modPanelReview">
-<div class="mod-select-group">
-<label class="mod-select-label">Catalog mod</label>
-<select id="modCatalogSelect" class="mod-select"><option value="">Select a catalog mod</option></select>
-</div>
-<div class="mod-select-group">
-<label class="mod-select-label">Target</label>
-<select id="modTargetSelect" class="mod-select">
-<option value="server">Server</option>
-<option value="client">Client</option>
-</select>
-</div>
+<div class="mod-select-group"><label class="mod-select-label">Package name</label><input id="modPackageName" class="mod-select" placeholder="Optional name for tracking"></div>
+<p class="mod-drop-hint">This package will be reviewed for server installation under the Palworld server directory.</p>
 <button class="btn-secondary" onclick="previewStaged()" style="width:100%">&#128065; Review Changes</button>
 </div>
 
@@ -1079,33 +1070,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <div id="modFeedback" class="mod-feedback" role="status" aria-live="polite"></div>
 </div>
 
-<!-- Right: Catalog Browser -->
+<!-- Uploaded package tracking -->
 <div>
-<div class="card" style="padding:16px">
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Catalog</div>
-<span class="catalog-count" id="modCount"></span>
-</div>
-<div class="catalog-toolbar">
-<div class="catalog-search">
-<span class="catalog-search-icon">&#128269;</span>
-<input id="modSearch" type="search" placeholder="Search mods..." oninput="renderModCatalog()">
-</div>
-<select id="modFilter" class="mod-select catalog-filter" onchange="renderModCatalog()">
-<option value="all">All mods</option>
-<option value="server">Server eligible</option>
-<option value="client">Client only</option>
-<option value="blocked">Blocked</option>
-</select>
-</div>
-<div id="modDetailPanel" class="mod-detail-panel" style="display:none"></div>
-<div id="modGrid" class="mod-grid"><p class="mod-empty"><span class="mod-empty-icon">&#128230;</span><br>Loading catalog...</p></div>
-</div>
-<div id="modResultBox" class="mod-result-box" style="display:none;margin-top:12px"></div>
-</div>
-</div>
-
+<div class="card" style="padding:16px"><div class="card-header"><span class="card-title">Uploaded package tracking</span></div><p class="mod-drop-hint">Packages are reviewed from their uploaded contents. No catalog approval is required.</p><div id="modResultBox" class="mod-result-box" style="display:none;margin-top:12px"></div></div>
 <div id="modOperations" style="margin-top:16px"></div>
+</div>
 </div>
 
 <!-- ═══ SYSTEM PAGE ═══ -->
@@ -1415,88 +1384,19 @@ function showModResult(text) {
 }
 
 function refreshMods() {
-  api('/api/mods').then(data => {
-    modCatalog = data.mods || [];
-    const catalog = document.getElementById('modCatalogSelect');
-    if (catalog) {
-      catalog.innerHTML = '<option value="">Select a catalog mod</option>' + modCatalog.map(m => '<option value="' + encodeURIComponent(m.id) + '">' + (m.name || m.id) + '</option>').join('');
-    }
-    renderModCatalog();
-  }).catch(e => {
-    const grid = document.getElementById('modGrid');
-    if (grid) grid.innerHTML = '<p class="mod-empty">Mods unavailable: ' + e.message + '</p>';
-  });
+  refreshModOperations();
+  const result = document.getElementById('modResultBox');
+  if (result && !result.textContent) result.textContent = 'Upload a package to begin. The uploaded contents determine the review and install plan.';
+  if (result) result.style.display = 'block';
 }
-
-function renderModCatalog() {
-  const query = (document.getElementById('modSearch')?.value || '').toLowerCase();
-  const filter = document.getElementById('modFilter')?.value || 'all';
-  const visible = modCatalog.filter(m => {
-    const text = ((m.name || '') + ' ' + (m.id || '') + ' ' + (m.notes || '')).toLowerCase();
-    const allowed = m.server_install_allowed === true;
-    const client = m.scope === 'client';
-    const blocked = !allowed || m.verification_state === 'unknown' || m.verification_state === 'unverified';
-    return (!query || text.includes(query)) && (filter === 'all' || (filter === 'server' && allowed) || (filter === 'client' && client) || (filter === 'blocked' && blocked));
-  });
-
-  const countEl = document.getElementById('modCount');
-  if (countEl) countEl.textContent = visible.length + ' mod' + (visible.length !== 1 ? 's' : '');
-
-  const grid = document.getElementById('modGrid');
-  if (!grid) return;
-  if (!visible.length) {
-    grid.innerHTML = '<p class="mod-empty"><span class="mod-empty-icon">&#128269;</span><br>No mods found. Try a different search or filter.</p>';
-    return;
-  }
-  grid.innerHTML = visible.map(m => {
-    const safe = m.server_install_allowed === true;
-    const state = m.verification_state || 'unknown';
-    const statusClass = safe ? (state === 'verified' ? 'ok' : 'warn') : 'blocked';
-    const tagClass = state === 'verified' ? 'verified' : (state === 'unverified' ? 'unverified' : 'blocked');
-    const sources = (m.source_urls || []).filter(url => /^https?:\/\//i.test(url));
-    return '<div class="mod-card" onclick="showModDetailPanel(\'' + encodeURIComponent(m.id) + '\')">' +
-      '<div class="mod-card-head"><div class="mod-card-name">' + (m.name || m.id) + '</div><div class="mod-card-status ' + statusClass + '"></div></div>' +
-      '<div class="mod-card-desc">' + (m.notes || m.server_install_gate || 'No description available.') + '</div>' +
-      '<div class="mod-card-tags"><span class="mod-tag scope">' + (m.scope || 'server') + '</span><span class="mod-tag ' + tagClass + '">' + state + '</span>' + (safe ? '' : '<span class="mod-tag blocked">blocked</span>') + '</div>' +
-      '<div class="mod-card-actions"><button class="btn-secondary" onclick="event.stopPropagation();showModDetailPanel(\'' + encodeURIComponent(m.id) + '\')">Details</button>' + (safe ? '<button class="btn-secondary" onclick="event.stopPropagation();modAction(\'' + encodeURIComponent(m.id) + '\',\'enable\')">Enable</button>' : '') + (sources.length ? '<a class="btn-secondary" href="' + sources[0] + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Reference</a>' : '') + '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function showModDetailPanel(encoded) {
-  const m = modCatalog.find(x => x.id === decodeURIComponent(encoded));
-  const panel = document.getElementById('modDetailPanel');
-  if (!m || !panel) return;
-  const safe = m.server_install_allowed === true;
-  const state = m.verification_state || 'unknown';
-  panel.style.display = 'block';
-  const sources = (m.source_urls || []).filter(url => /^https?:\/\//i.test(url));
-  const links = sources.map((url, index) => '<a class="btn-secondary" href="' + url + '" target="_blank" rel="noopener noreferrer">Reference' + (sources.length > 1 ? ' ' + (index + 1) : '') + '</a>').join('');
-  panel.innerHTML = '<div class="mod-detail-head"><div class="mod-detail-name">' + (m.name || m.id) + '</div><button class="mod-detail-close" onclick="closeModDetail()">&times;</button></div>' +
-    '<div class="mod-detail-grid"><div class="mod-detail-field"><div class="mod-detail-field-label">ID</div><div class="mod-detail-field-value">' + m.id + '</div></div><div class="mod-detail-field"><div class="mod-detail-field-label">Scope</div><div class="mod-detail-field-value">' + (m.scope || 'server') + '</div></div><div class="mod-detail-field"><div class="mod-detail-field-label">Verification</div><div class="mod-detail-field-value">' + state + '</div></div><div class="mod-detail-field"><div class="mod-detail-field-label">Server Install</div><div class="mod-detail-field-value">' + (safe ? 'Allowed' : 'Blocked') + '</div></div>' + (m.version ? '<div class="mod-detail-field"><div class="mod-detail-field-label">Version</div><div class="mod-detail-field-value">' + m.version + '</div></div>' : '') + '</div>' +
-    (m.notes ? '<div class="mod-detail-notes">' + m.notes + '</div>' : '') + '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">' + links + '<button class="btn-secondary" onclick="showInstructions(\'' + encoded + '\')">View Instructions</button>' + (safe ? '<button class="btn-primary" onclick="modAction(\'' + encoded + '\',\'enable\')">Enable Mod</button>' : '') + '</div>';
-}
-function closeModDetail() {
-  const panel = document.getElementById('modDetailPanel');
-  if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
-}
-
 function refreshModOperations() {
   api('/api/operations').then(d => {
-    const el = document.getElementById('modOperations');
-    const ops = d.operations || [];
-    if (el) {
-      if (!ops.length) { el.innerHTML = ''; return; }
-      el.innerHTML = '<div class="card" style="padding:16px;margin-top:12px"><div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Recent Activity</div>' +
-        ops.slice(0, 5).map(op => '<div class="info-row"><span class="info-label">' + (op.action || op.type || 'operation') + '</span><span class="info-value">' + (op.timestamp || op.date || '') + '</span></div>').join('') +
-      '</div>';
-    }
+    const el = document.getElementById('modOperations'), ops = d.operations || [];
+    if (el) el.innerHTML = ops.length ? '<div class="card" style="padding:16px;margin-top:12px"><div class="card-title">Recent Activity</div>' + ops.slice(0, 5).map(op => '<div class="info-row"><span class="info-label">' + (op.action || op.type || 'operation') + '</span><span class="info-value">' + (op.timestamp || op.date || '') + '</span></div>').join('') + '</div>' : '';
   });
-  api('/api/mod-backups').then(d => {
-    const s = document.getElementById('modBackupSelect');
-    if (s) s.innerHTML = '<option value="">Select a backup</option>' + (d.backups || []).map(b => '<option value="' + encodeURIComponent(b.path || b.name || '') + '">' + (b.name || b.path || 'backup') + '</option>').join('');
-  });
+  api('/api/mod-backups').then(d => { const s = document.getElementById('modBackupSelect'); if (s) s.innerHTML = '<option value="">Select a backup</option>' + (d.backups || []).map(b => '<option value="' + encodeURIComponent(b.path || b.name || '') + '">' + (b.name || b.path || 'backup') + '</option>').join(''); });
 }
+
 
 function modAction(id, action) {
   const modId = decodeURIComponent(id);
@@ -1544,11 +1444,10 @@ function inspectStaged() {
 
 function previewStaged() {
   const path = document.getElementById('modStagingSelect').value;
-  const id = decodeURIComponent(document.getElementById('modCatalogSelect').value);
-  const target = document.getElementById('modTargetSelect').value;
-  if (!path || !id) return toast('Select staged package and catalog mod', 'error');
-  toast('Generating preview...', 'info');
-  api('/api/mods/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staging_dir: path, mod_id: id, target_root: '__PALWORLD_DIR__', target: target }) })
+  const id = document.getElementById('modPackageName').value.trim() || path.split('/').pop();
+  if (!path) return toast('Upload and inspect a package first', 'error');
+  toast('Generating server preview...', 'info');
+  api('/api/mods/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staging_dir: path, mod_id: id, target: 'server' }) })
     .then(d => { if (!d.success) return toast(d.message || 'Preview failed', 'error'); window.modPlan = d.result; showModResult(JSON.stringify(d, null, 2)); setModStep('backup', true); });
 }
 
@@ -1765,11 +1664,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if path.endswith('/inspect'):
                     result = inspect_packages(staging_dir)
                 else:
-                    mod_id = data.get('mod_id')
-                    if not mod_id:
-                        raise ValueError('mod_id is required')
-                    target_root = _confined_path(data.get('target_root', str(PALWORLD_DIR)), PALWORLD_DIR, 'target_root')
-                    result = preview_plan(staging_dir, target_root, mod_id, target=data.get('target', 'server'))
+                    mod_id = data.get('mod_id') or Path(staging_dir).name
+                    target_root = _confined_path(str(PALWORLD_DIR), PALWORLD_DIR, 'target_root')
+                    result = preview_plan(staging_dir, target_root, mod_id, target='server')
                 self.send_json({'success': True, 'result': result})
             except Exception as error:
                 self.send_json({'success': False, 'message': str(error)}, 400)

@@ -72,8 +72,8 @@ class ModManagerTests(unittest.TestCase):
             mod_manager.set_mod_state(manifest, "approved", "disable")
             self.assertFalse(owned.exists())
             self.assertTrue((root / "server" / "keep.txt").exists())
-            with self.assertRaises(mod_manager.ModManagerError):
-                mod_manager.preview_plan(staged["staging_dir"], root / "server", "unknown")
+            plan = mod_manager.preview_plan(staged["staging_dir"], root / "server", "unknown")
+            self.assertEqual(plan["mod_id"], "unknown")
 
     def test_stage_single_pak_file(self):
         with tempfile.TemporaryDirectory() as directory:

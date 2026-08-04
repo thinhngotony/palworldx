@@ -355,30 +355,18 @@ def inspect_packages(staging_dir: os.PathLike[str] | str) -> dict[str, Any]:
             "unsupported": sorted(unsupported), "supported": bool(pak or ue4ss)}
 
 
-def _gate(mod_id: str, package: Mapping[str, Any], catalog: Mapping[str, Mapping[str, Any]], target: str) -> dict[str, Any]:
-    try:
-        mod = get_mod(mod_id, catalog)
-    except KeyError as exc:
-        raise ModManagerError("unknown mods are blocked by default") from exc
-    if target == "server" and not mod.get("server_install_allowed", False):
-        raise ModManagerError(f"server installation is not approved for {mod_id}")
-    scope = mod.get("scope", "unknown")
-    if scope not in {target, "both"}:
-        raise ModManagerError(f"mod is not compatible with {target}")
-    if not package.get("supported") or package.get("unsupported"):
-        raise ModManagerError("package contains unsupported or unrecognized files")
-    return mod
-
-
 def preview_plan(staging_dir: os.PathLike[str] | str, target_root: os.PathLike[str] | str,
                  mod_id: str, *, target: str = "server",
                  catalog: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
-    """Return a deterministic plan; this performs no writes and rejects unsafe targets."""
+    """Return a deterministic plan for any inspected package within target_root."""
     if target not in {"server", "client"}:
         raise ModManagerError("target must be server or client")
+    if not isinstance(mod_id, str) or not mod_id.strip():
+        raise ModManagerError("mod_id is required")
     root = Path(target_root).expanduser().resolve()
     package = inspect_packages(staging_dir)
-    mod = _gate(mod_id, package, catalog or load_catalog(), target)
+    if not package.get("supported") or package.get("unsupported"):
+        raise ModManagerError("package contains unsupported or unrecognized files")
     files = sorted(p for p in Path(staging_dir).resolve().rglob("*") if p.is_file() and not p.is_symlink())
     entries = []
     for source in files:
@@ -386,10 +374,8 @@ def preview_plan(staging_dir: os.PathLike[str] | str, target_root: os.PathLike[s
         destination = (root / relative).resolve()
         if not _under(destination, root):
             raise UnsafeArchivePath(relative)
-        entries.append({"path": relative, "sha256": sha256_file(source),
-                        "destination": str(destination), "owned": True})
-    return {"mod_id": canonical_mod_id(mod["id"], catalog or load_catalog()), "target": target,
-            "files": entries, "package": package}
+        entries.append({"path": relative, "sha256": sha256_file(source), "destination": str(destination), "owned": True})
+    return {"mod_id": mod_id.strip(), "target": target, "files": entries, "package": package}
 
 
 def apply_plan(plan: Mapping[str, Any], staging_dir: os.PathLike[str] | str,
