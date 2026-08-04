@@ -930,7 +930,6 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 <div><div class="page-title">Mods</div><div class="page-subtitle">Authenticated mod manager integration</div></div>
 <div class="header-actions"><button class="btn-refresh" onclick="refreshMods()">&#x21bb; Refresh</button></div>
 </div>
-<div class="card">
 <div class="card-header"><span class="card-title">Mod packages</span><button class="btn-refresh" onclick="refreshModOperations()">Operations</button></div>
 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
 <input id="modUpload" type="file" accept=".zip" style="color:var(--text-secondary);font-size:13px">
@@ -941,8 +940,14 @@ background-image:radial-gradient(ellipse at 20% 0%,rgba(88,80,236,0.08),transpar
 <button class="btn-refresh" onclick="createModBackup()">Create backup</button>
 <button class="btn-refresh" onclick="rollbackMod()">Rollback backup</button>
 </div>
+<div class="controls-grid" style="margin-bottom:16px">
+<label>Staged package<select id="modStagingSelect"><option value="">Upload a package first</option></select></label>
+<label>Catalog mod<select id="modCatalogSelect"><option value="">Select a catalog mod</option></select></label>
+<label>Target<select id="modTargetSelect"><option value="server">Server</option><option value="client">Client</option></select></label>
+<label>Backup<select id="modBackupSelect"><option value="">No backups available</option></select></label>
+</div>
 <div id="modList"><p style="color:var(--text-muted);font-size:13px">Loading...</p></div>
-<div id="modPreview" style="margin-top:16px"></div>
+<div id="modPreview" style="margin-top:16px;white-space:pre-wrap"></div>
 <div id="modOperations" style="margin-top:16px"></div>
 <p style="color:var(--text-muted);font-size:12px;margin-top:16px">Uploads are staged and inspected before applying. Every upload or apply requires a fresh maintenance confirmation; the dashboard never interrupts the server without confirmation.</p>
 </div>
@@ -1212,34 +1217,19 @@ function refreshBackups() {
   });
 }
 
-// ─── Mods ───
-function refreshMods() {
-  api('/api/mods').then(data => {
-    const el=document.getElementById('modList'), mods=data.mods||[]; el.innerHTML='';
-    if(!mods.length){el.textContent=data.available===false?'Mod backend is unavailable.':'No catalog mods found.';return;}
-    mods.forEach(mod=>{const row=document.createElement('div');row.className='info-row';const label=document.createElement('span');label.className='info-label';label.textContent=mod.name||mod.id;row.appendChild(label);['Instructions','Enable','Disable','Remove'].forEach((text,i)=>{const b=document.createElement('button');b.className='btn-refresh';b.textContent=text;b.onclick=()=>i?modAction(mod.id,text.toLowerCase()):showInstructions(mod.id);row.appendChild(b);});el.appendChild(row);});
+    mods.forEach(mod=>{const row=document.createElement('div');row.className='info-row';const label=document.createElement('span');label.className='info-label';label.textContent=(mod.name||mod.id)+' · '+(mod.scope||'unknown')+' · '+(mod.verification_state||mod.status||'unknown');row.appendChild(label);['Instructions','Enable','Disable','Remove'].forEach((text,i)=>{const b=document.createElement('button');b.className='btn-refresh';b.textContent=text;b.onclick=()=>i?modAction(mod.id,text.toLowerCase()):showInstructions(mod.id);row.appendChild(b);});el.appendChild(row);});
+    const catalog=document.getElementById('modCatalogSelect'); catalog.innerHTML='<option value="">Select a catalog mod</option>'+mods.map(m=>'<option value="'+encodeURIComponent(m.id)+'">'+(m.name||m.id)+'</option>').join('');
   }).catch(e=>{document.getElementById('modList').textContent='Mods unavailable: '+e.message;});
 }
-function modAction(id,action){if(!confirm('Confirm mod '+action+'?'))return;api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(d=>d.requires_confirmation&&confirm(d.message+' Continue?')?api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}):d).then(d=>d.success?(toast('Mod '+action+' complete','success'),refreshMods()):toast(d.message||'Mod action failed','error'));}
+function refreshModOperations(){api('/api/operations').then(d=>{document.getElementById('modOperations').textContent=JSON.stringify(d.operations||[],null,2);});api('/api/mod-backups').then(d=>{const s=document.getElementById('modBackupSelect');s.innerHTML='<option value="">Select a backup</option>'+(d.backups||[]).map(b=>'<option value="'+encodeURIComponent(b.path||b.name||'')+'">'+(b.name||b.path||'backup')+'</option>').join('');});}
+function modAction(id,action){if(!confirm('Confirm mod '+action+'?'))return;api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(d=>d.requires_confirmation&&confirm(d.message+' Continue?')?api('/api/mods/'+encodeURIComponent(id)+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}):d).then(d=>d.success?(toast('Mod '+action+' complete','success'),refreshMods(),refreshModOperations()):toast(d.message||'Mod action failed','error'));}
 function showInstructions(id) { api('/api/mods/'+encodeURIComponent(id)+'/instructions').then(d=>{document.getElementById('modPreview').textContent=JSON.stringify(d.instructions||d,null,2);}); }
-function uploadMod() {
-  const file=document.getElementById('modUpload').files[0];
-  if(!file)return toast('Choose a ZIP package first','error');
-  if(!confirm('Stage this upload for inspection?'))return;
-  const form=new FormData(); form.append('file',file);
-  api('/api/mods/upload',{method:'POST',body:form}).then(d=>d.requires_confirmation&&confirm(d.message+' Continue?')?api('/api/mods/upload',{method:'POST',headers:{'X-Maintenance-Confirmation':d.confirmation_token},body:form}):d).then(d=>{
-    if(d.success){
-      window.modStaging=d.staged&&d.staged.staging_dir;
-      toast('Upload staged','success');
-      document.getElementById('modPreview').textContent=JSON.stringify(d.staged,null,2);
-    } else toast(d.message||'Upload failed','error');
-  });
-}
-function inspectStaged(){const path=window.modStaging||prompt('Staging directory path','');if(path)api('/api/mods/inspect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({staging_dir:path})}).then(d=>document.getElementById('modPreview').textContent=JSON.stringify(d,null,2));}
-function previewStaged(){const path=window.modStaging||prompt('Staging directory path',''),id=prompt('Catalog mod ID','');if(path&&id)api('/api/mods/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({staging_dir:path,mod_id:id,target_root:'__PALWORLD_DIR__'})}).then(d=>{if(d.success){window.modPlan=d.result;window.modStaging=path;}document.getElementById('modPreview').textContent=JSON.stringify(d,null,2);});}
-function applyModPlan(){const plan=window.modPlan;if(!plan)return toast('Preview a plan before applying','error');const payload={plan:plan,staging_dir:window.modStaging||prompt('Staging directory path','')};const send=body=>api('/api/mods/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});send(payload).then(d=>d.requires_confirmation&&confirm(d.message||'Confirm applying this mod plan?')?send({...payload,maintenance_confirmation:d.confirmation_token}):d).then(d=>toast(d.message||'Apply requested',d.success?'success':'error')).catch(e=>toast('Apply failed: '+e.message,'error'));}
-function createModBackup(){api('/api/mods/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(d=>d.requires_confirmation&&confirm('Create backup?')?api('/api/mods/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}):d).then(d=>toast(d.message||'Backup created',d.success?'success':'error'));}
-function rollbackMod(){const backup=prompt('Backup path','');if(!backup)return;const payload={backup_path:backup};const send=body=>api('/api/mods/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});send(payload).then(d=>d.requires_confirmation&&confirm(d.message||'Confirm rollback?')?send({...payload,maintenance_confirmation:d.confirmation_token}):d).then(d=>toast(d.message||'Rollback requested',d.success?'success':'error')).catch(e=>toast('Rollback failed: '+e.message,'error'));}
+function uploadMod() { const file=document.getElementById('modUpload').files[0]; if(!file)return toast('Choose a ZIP package first','error'); if(!confirm('Stage this upload for inspection?'))return; const form=new FormData();form.append('file',file);api('/api/mods/upload',{method:'POST',body:form}).then(d=>d.requires_confirmation&&confirm(d.message+' Continue?')?api('/api/mods/upload',{method:'POST',headers:{'X-Maintenance-Confirmation':d.confirmation_token},body:form}):d).then(d=>{if(!d.success)return toast(d.message||'Upload failed','error');window.modStaging=d.staged.staging_dir;const s=document.getElementById('modStagingSelect');s.innerHTML='<option value="'+window.modStaging+'">'+window.modStaging+'</option>';document.getElementById('modPreview').textContent=JSON.stringify(d.staged,null,2);toast('Upload staged','success');refreshModOperations();}); }
+function inspectStaged(){const path=document.getElementById('modStagingSelect').value;if(!path)return toast('Upload a package first','error');api('/api/mods/inspect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({staging_dir:path})}).then(d=>document.getElementById('modPreview').textContent=JSON.stringify(d,null,2));}
+function previewStaged(){const path=document.getElementById('modStagingSelect').value,id=decodeURIComponent(document.getElementById('modCatalogSelect').value),target=document.getElementById('modTargetSelect').value;if(!path||!id)return toast('Select staged package and catalog mod','error');api('/api/mods/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({staging_dir:path,mod_id:id,target_root:'__PALWORLD_DIR__',target:target})}).then(d=>{if(d.success)window.modPlan=d.result;document.getElementById('modPreview').textContent=JSON.stringify(d,null,2);});}
+function applyModPlan(){const plan=window.modPlan,path=document.getElementById('modStagingSelect').value;if(!plan||!path)return toast('Preview a plan before applying','error');const payload={plan:plan,staging_dir:path};const send=body=>api('/api/mods/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});send(payload).then(d=>d.requires_confirmation&&confirm(d.message||'Confirm applying this mod plan?')?send({...payload,maintenance_confirmation:d.confirmation_token}):d).then(d=>{toast(d.message||JSON.stringify(d.result||d),d.success?'success':'error');refreshMods();refreshModOperations();}).catch(e=>toast('Apply failed: '+e.message,'error'));}
+function createModBackup(){api('/api/mods/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(d=>d.requires_confirmation&&confirm('Create backup?')?api('/api/mods/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({maintenance_confirmation:d.confirmation_token})}):d).then(d=>{toast(d.message||'Backup created',d.success?'success':'error');refreshModOperations();});}
+function rollbackMod(){const backup=decodeURIComponent(document.getElementById('modBackupSelect').value);if(!backup)return toast('Select a backup first','error');const payload={backup_path:backup};const send=body=>api('/api/mods/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});send(payload).then(d=>d.requires_confirmation&&confirm(d.message||'Confirm rollback?')?send({...payload,maintenance_confirmation:d.confirmation_token}):d).then(d=>{toast(d.message||'Rollback requested',d.success?'success':'error');refreshModOperations();}).catch(e=>toast('Rollback failed: '+e.message,'error'));}
 // ─── Refresh all ───
 function refreshAll() { refreshStats(); }
 
@@ -1387,19 +1377,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
+        path = urllib.parse.urlparse(self.path).path
         content_length = int(self.headers.get('Content-Length', 0))
-        if content_length > 1024 * 1024:
+        upload_limit = (getattr(mod_manager, 'DEFAULT_MAX_UPLOAD_BYTES', 512 * 1024 * 1024) + 1024 * 1024
+                        if path == '/api/mods/upload' else 1024 * 1024)
+        if content_length > upload_limit:
             self.send_json({'success': False, 'message': 'Request too large'}, 413)
             return
         raw_body = self.rfile.read(content_length) if content_length > 0 else b''
         body = raw_body.decode('utf-8', errors='replace')
-        path = urllib.parse.urlparse(self.path).path
         if path != '/login' and not self.is_authenticated():
             self.send_response(302)
             self.send_header('Location', '/login')
             self.end_headers()
             return
-        path = urllib.parse.urlparse(self.path).path
 
         if path == '/login':
             # Parse form data
