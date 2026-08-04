@@ -1217,6 +1217,10 @@ function refreshBackups() {
   });
 }
 
+function refreshMods() {
+  api('/api/mods').then(data => {
+    const el=document.getElementById('modList'), mods=data.mods||[]; el.innerHTML='';
+    if(!mods.length){el.textContent=data.available===false?'Mod backend is unavailable.':'No catalog mods found.';return;}
     mods.forEach(mod=>{const row=document.createElement('div');row.className='info-row';const label=document.createElement('span');label.className='info-label';label.textContent=(mod.name||mod.id)+' · '+(mod.scope||'unknown')+' · '+(mod.verification_state||mod.status||'unknown');row.appendChild(label);['Instructions','Enable','Disable','Remove'].forEach((text,i)=>{const b=document.createElement('button');b.className='btn-refresh';b.textContent=text;b.onclick=()=>i?modAction(mod.id,text.toLowerCase()):showInstructions(mod.id);row.appendChild(b);});el.appendChild(row);});
     const catalog=document.getElementById('modCatalogSelect'); catalog.innerHTML='<option value="">Select a catalog mod</option>'+mods.map(m=>'<option value="'+encodeURIComponent(m.id)+'">'+(m.name||m.id)+'</option>').join('');
   }).catch(e=>{document.getElementById('modList').textContent='Mods unavailable: '+e.message;});
