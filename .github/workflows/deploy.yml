@@ -66,9 +66,10 @@ jobs:
           ssh -o StrictHostKeyChecking=yes -p "$PRODUCTION_PORT" root@"$PRODUCTION_HOST" \
             'systemctl restart palworld-dashboard.service && systemctl is-active --quiet palworld-dashboard.service'
 
-      - name: Smoke test dashboard
+      - name: Smoke test dashboard on production host
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_PORT: ${{ secrets.PRODUCTION_PORT }}
         run: |
-          curl --fail --silent --show-error "http://$PRODUCTION_HOST:8090/login" | grep -q 'Palworld Dashboard'
+          ssh -o StrictHostKeyChecking=yes -p "$PRODUCTION_PORT" root@"$PRODUCTION_HOST" \
+            'curl --fail --silent --show-error http://127.0.0.1:8090/login | grep -q "Palworld Dashboard"'
